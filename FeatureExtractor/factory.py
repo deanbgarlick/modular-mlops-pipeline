@@ -5,6 +5,7 @@ from .count_vectorizer import CountVectorizerExtractor
 from .tfidf_vectorizer import TfidfVectorizerExtractor
 from .huggingface import HuggingFaceExtractor
 from .word2vec import Word2VecExtractor
+from .openai_embeddings import OpenAIEmbeddingsExtractor
 
 
 def create_feature_extractor(extractor_type: FeatureExtractorType, **kwargs) -> FeatureExtractor:
@@ -28,5 +29,7 @@ def create_feature_extractor(extractor_type: FeatureExtractorType, **kwargs) -> 
         return HuggingFaceExtractor(**kwargs)
     elif extractor_type == FeatureExtractorType.WORD2VEC:
         return Word2VecExtractor(**kwargs)
+    elif extractor_type == FeatureExtractorType.OPENAI_EMBEDDINGS:
+        return OpenAIEmbeddingsExtractor(**kwargs)
     else:
         raise ValueError(f"Unknown extractor type: {extractor_type}") 

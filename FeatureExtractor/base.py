@@ -12,6 +12,7 @@ class FeatureExtractorType(Enum):
     TFIDF_VECTORIZER = "tfidf_vectorizer"
     HUGGINGFACE_TRANSFORMER = "huggingface_transformer"
     WORD2VEC = "word2vec"
+    OPENAI_EMBEDDINGS = "openai_embeddings"
 
 
 class FeatureExtractor(ABC):

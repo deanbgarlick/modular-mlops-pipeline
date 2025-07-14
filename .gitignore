@@ -1,3 +1,4 @@
+.env
 venv/
 __pycache__/
 *.pyc
@@ -9,3 +10,4 @@ __pycache__/
 *.pyzw
 *.pyzwz
 *.csv
+*.pkl
