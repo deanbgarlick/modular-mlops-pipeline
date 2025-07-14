@@ -1,11 +1,18 @@
 """Base classes and enums for supervised models."""
 
 import numpy as np
+import pandas as pd
+import scipy.sparse
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Union
 
 from .persistence import ModelPersistence, PickleGCPBucketPersistence, TorchGCPBucketPersistence
+
+# Type alias for feature matrices that can be used with supervised models
+FeatureMatrix = Union[np.ndarray, scipy.sparse.csr_matrix, pd.DataFrame]
+# Type alias for target labels
+TargetLabels = Union[np.ndarray, pd.Series]
 
 
 class SupervisedModelType(Enum):
@@ -42,7 +49,7 @@ class SupervisedModel(ABC):
         return 'PyTorch' in model_class_name or 'Torch' in model_class_name
     
     @abstractmethod
-    def fit(self, X_train: Any, y_train: Any, class_weights: Optional[dict] = None) -> None:
+    def fit(self, X_train: FeatureMatrix, y_train: TargetLabels, class_weights: Optional[dict] = None) -> None:
         """
         Train the model on training data.
         
@@ -54,7 +61,7 @@ class SupervisedModel(ABC):
         pass
     
     @abstractmethod
-    def predict(self, X: Any) -> np.ndarray:
+    def predict(self, X: FeatureMatrix) -> np.ndarray:
         """
         Make predictions on input data.
         
@@ -67,7 +74,7 @@ class SupervisedModel(ABC):
         pass
     
     @abstractmethod
-    def predict_proba(self, X: Any) -> np.ndarray:
+    def predict_proba(self, X: FeatureMatrix) -> np.ndarray:
         """
         Make probability predictions on input data.
         
@@ -78,6 +85,46 @@ class SupervisedModel(ABC):
             np.ndarray: Predicted class probabilities
         """
         pass
+    
+    def fit_transform(self, X_train: FeatureMatrix, X_test: Optional[FeatureMatrix] = None, 
+                     y_train: Optional[TargetLabels] = None) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """
+        Fit the model and return predictions/probabilities for training and optionally test data.
+        This method makes SupervisedModel compatible with the TransformationStep protocol.
+        
+        Args:
+            X_train: Training features
+            X_test: Test features (optional)
+            y_train: Training labels (optional, used if model needs to be fitted)
+            
+        Returns:
+            Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]: 
+                - If X_test is None: predictions/probabilities for X_train
+                - If X_test provided: tuple of (X_train_predictions, X_test_predictions)
+        """
+        if y_train is not None:
+            self.fit(X_train, y_train)
+        
+        train_predictions = self.predict_proba(X_train)
+        
+        if X_test is not None:
+            test_predictions = self.predict_proba(X_test)
+            return train_predictions, test_predictions
+        else:
+            return train_predictions
+    
+    def transform(self, X: FeatureMatrix) -> np.ndarray:
+        """
+        Transform input features to predictions/probabilities.
+        This method makes SupervisedModel compatible with the TransformationStep protocol.
+        
+        Args:
+            X: Input features to transform
+            
+        Returns:
+            np.ndarray: Predicted probabilities
+        """
+        return self.predict_proba(X)
     
     @abstractmethod
     def get_model_info(self) -> dict:

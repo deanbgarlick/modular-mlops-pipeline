@@ -3,8 +3,11 @@
 import pickle
 import io
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Optional, Tuple, TYPE_CHECKING
 import os
+
+if TYPE_CHECKING:
+    from google.cloud import storage
 
 
 class ModelPersistence(ABC):
@@ -38,36 +41,37 @@ class ModelPersistence(ABC):
 class PickleGCPBucketPersistence(ModelPersistence):
     """GCP bucket persistence using pickle serialization."""
     
-    def __init__(self, bucket_name: str, credentials_path: Optional[str] = None):
+    def __init__(self, bucket_name: str):
         """
         Initialize GCP bucket persistence with pickle serialization.
         
+        Uses environment variables for authentication:
+        - GOOGLE_APPLICATION_CREDENTIALS: Path to service account JSON file (optional)
+        - Or uses default credentials (gcloud auth, service account, etc.)
+        
         Args:
             bucket_name: Name of the GCP bucket
-            credentials_path: Path to GCP credentials JSON file (optional)
         """
         self.bucket_name = bucket_name
-        self.credentials_path = credentials_path
         self._client = None
         self._bucket = None
     
-    def _get_client(self):
+    def _get_client(self) -> Tuple[Any, Any]:
         """Lazy initialization of GCP client."""
         if self._client is None:
             try:
-                from google.cloud import storage
-                if self.credentials_path:
-                    self._client = storage.Client.from_service_account_json(self.credentials_path)
-                else:
-                    self._client = storage.Client()
+                from google.cloud import storage  # type: ignore
+                # Use default credentials from environment
+                self._client = storage.Client()
                 self._bucket = self._client.bucket(self.bucket_name)
             except ImportError:
                 raise ImportError("google-cloud-storage package is required for GCP persistence")
-        return self._client
+        assert self._client is not None and self._bucket is not None
+        return self._client, self._bucket
     
     def save(self, model: Any, path: str) -> None:
         """Save model to GCP bucket using pickle."""
-        self._get_client()
+        client, bucket = self._get_client()
         
         # Serialize model to bytes using pickle
         buffer = io.BytesIO()
@@ -75,17 +79,17 @@ class PickleGCPBucketPersistence(ModelPersistence):
         buffer.seek(0)
         
         # Upload to GCP bucket
-        blob = self._bucket.blob(path)
+        blob = bucket.blob(path)
         blob.upload_from_file(buffer, content_type='application/octet-stream')
         
         print(f"Model saved to GCP bucket (pickle): gs://{self.bucket_name}/{path}")
     
     def load(self, path: str) -> Any:
         """Load model from GCP bucket using pickle."""
-        self._get_client()
+        client, bucket = self._get_client()
         
         # Download from GCP bucket
-        blob = self._bucket.blob(path)
+        blob = bucket.blob(path)
         buffer = io.BytesIO()
         blob.download_to_file(buffer)
         buffer.seek(0)
@@ -99,37 +103,30 @@ class PickleGCPBucketPersistence(ModelPersistence):
 class PickleAWSBucketPersistence(ModelPersistence):
     """AWS S3 bucket persistence using pickle serialization."""
     
-    def __init__(self, bucket_name: str, region: str = 'us-east-1', 
-                 access_key_id: Optional[str] = None, secret_access_key: Optional[str] = None):
+    def __init__(self, bucket_name: str):
         """
         Initialize AWS S3 persistence with pickle serialization.
         
+        Uses environment variables for configuration:
+        - AWS_DEFAULT_REGION or AWS_REGION: AWS region (defaults to 'us-east-1')
+        - AWS_ACCESS_KEY_ID: AWS access key ID (optional, can use IAM roles)
+        - AWS_SECRET_ACCESS_KEY: AWS secret access key (optional, can use IAM roles)
+        - AWS_PROFILE: AWS profile name (optional)
+        
         Args:
             bucket_name: Name of the S3 bucket
-            region: AWS region
-            access_key_id: AWS access key ID (optional, can use env vars)
-            secret_access_key: AWS secret access key (optional, can use env vars)
         """
         self.bucket_name = bucket_name
-        self.region = region
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
+        self.region = os.getenv('AWS_DEFAULT_REGION') or os.getenv('AWS_REGION', 'us-east-1')
         self._client = None
     
     def _get_client(self):
         """Lazy initialization of AWS client."""
         if self._client is None:
             try:
-                import boto3
-                if self.access_key_id and self.secret_access_key:
-                    self._client = boto3.client(
-                        's3',
-                        region_name=self.region,
-                        aws_access_key_id=self.access_key_id,
-                        aws_secret_access_key=self.secret_access_key
-                    )
-                else:
-                    self._client = boto3.client('s3', region_name=self.region)
+                import boto3  # type: ignore
+                # boto3 will automatically use environment variables and IAM roles
+                self._client = boto3.client('s3', region_name=self.region)
             except ImportError:
                 raise ImportError("boto3 package is required for AWS persistence")
         return self._client
@@ -205,36 +202,37 @@ class PickleLocalFilePersistence(ModelPersistence):
 class TorchGCPBucketPersistence(ModelPersistence):
     """GCP bucket persistence using PyTorch serialization."""
     
-    def __init__(self, bucket_name: str, credentials_path: Optional[str] = None):
+    def __init__(self, bucket_name: str):
         """
         Initialize GCP bucket persistence with PyTorch serialization.
         
+        Uses environment variables for authentication:
+        - GOOGLE_APPLICATION_CREDENTIALS: Path to service account JSON file (optional)
+        - Or uses default credentials (gcloud auth, service account, etc.)
+        
         Args:
             bucket_name: Name of the GCP bucket
-            credentials_path: Path to GCP credentials JSON file (optional)
         """
         self.bucket_name = bucket_name
-        self.credentials_path = credentials_path
         self._client = None
         self._bucket = None
     
-    def _get_client(self):
+    def _get_client(self) -> Tuple[Any, Any]:
         """Lazy initialization of GCP client."""
         if self._client is None:
             try:
-                from google.cloud import storage
-                if self.credentials_path:
-                    self._client = storage.Client.from_service_account_json(self.credentials_path)
-                else:
-                    self._client = storage.Client()
+                from google.cloud import storage  # type: ignore
+                # Use default credentials from environment
+                self._client = storage.Client()
                 self._bucket = self._client.bucket(self.bucket_name)
             except ImportError:
                 raise ImportError("google-cloud-storage package is required for GCP persistence")
-        return self._client
+        assert self._client is not None and self._bucket is not None
+        return self._client, self._bucket
     
     def save(self, model: Any, path: str) -> None:
         """Save model to GCP bucket using PyTorch serialization."""
-        self._get_client()
+        client, bucket = self._get_client()
         
         try:
             import torch
@@ -247,14 +245,14 @@ class TorchGCPBucketPersistence(ModelPersistence):
         buffer.seek(0)
         
         # Upload to GCP bucket
-        blob = self._bucket.blob(path)
+        blob = bucket.blob(path)
         blob.upload_from_file(buffer, content_type='application/octet-stream')
         
         print(f"Model saved to GCP bucket (torch): gs://{self.bucket_name}/{path}")
     
     def load(self, path: str) -> Any:
         """Load model from GCP bucket using PyTorch serialization."""
-        self._get_client()
+        client, bucket = self._get_client()
         
         try:
             import torch
@@ -262,7 +260,7 @@ class TorchGCPBucketPersistence(ModelPersistence):
             raise ImportError("PyTorch is required for torch persistence")
         
         # Download from GCP bucket
-        blob = self._bucket.blob(path)
+        blob = bucket.blob(path)
         buffer = io.BytesIO()
         blob.download_to_file(buffer)
         buffer.seek(0)
@@ -276,37 +274,30 @@ class TorchGCPBucketPersistence(ModelPersistence):
 class TorchAWSBucketPersistence(ModelPersistence):
     """AWS S3 bucket persistence using PyTorch serialization."""
     
-    def __init__(self, bucket_name: str, region: str = 'us-east-1', 
-                 access_key_id: Optional[str] = None, secret_access_key: Optional[str] = None):
+    def __init__(self, bucket_name: str):
         """
         Initialize AWS S3 persistence with PyTorch serialization.
         
+        Uses environment variables for configuration:
+        - AWS_DEFAULT_REGION or AWS_REGION: AWS region (defaults to 'us-east-1')
+        - AWS_ACCESS_KEY_ID: AWS access key ID (optional, can use IAM roles)
+        - AWS_SECRET_ACCESS_KEY: AWS secret access key (optional, can use IAM roles)
+        - AWS_PROFILE: AWS profile name (optional)
+        
         Args:
             bucket_name: Name of the S3 bucket
-            region: AWS region
-            access_key_id: AWS access key ID (optional, can use env vars)
-            secret_access_key: AWS secret access key (optional, can use env vars)
         """
         self.bucket_name = bucket_name
-        self.region = region
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
+        self.region = os.getenv('AWS_DEFAULT_REGION') or os.getenv('AWS_REGION', 'us-east-1')
         self._client = None
     
     def _get_client(self):
         """Lazy initialization of AWS client."""
         if self._client is None:
             try:
-                import boto3
-                if self.access_key_id and self.secret_access_key:
-                    self._client = boto3.client(
-                        's3',
-                        region_name=self.region,
-                        aws_access_key_id=self.access_key_id,
-                        aws_secret_access_key=self.secret_access_key
-                    )
-                else:
-                    self._client = boto3.client('s3', region_name=self.region)
+                import boto3  # type: ignore
+                # boto3 will automatically use environment variables and IAM roles
+                self._client = boto3.client('s3', region_name=self.region)
             except ImportError:
                 raise ImportError("boto3 package is required for AWS persistence")
         return self._client
