@@ -161,79 +161,35 @@ def main(feature_extractor_type: FeatureExtractorType = FeatureExtractorType.COU
     except Exception as e:
         print(f"Error transforming sample text: {e}")
 
-def run_with_count_vectorizer():
-    """Run pipeline with count vectorizer and logistic regression."""
-    main(
-        feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
-        model_type=ModelType.LOGISTIC_REGRESSION,
-        use_class_weights=False,
-        extractor_kwargs={"max_features": 10000}
-    )
 
-def run_with_huggingface():
-    """Run pipeline with HuggingFace transformer and logistic regression."""
-    main(
-        feature_extractor_type=FeatureExtractorType.HUGGINGFACE_TRANSFORMER,
-        model_type=ModelType.LOGISTIC_REGRESSION,
-        use_class_weights=False,
-        extractor_kwargs={"model_name": "sentence-transformers/all-MiniLM-L6-v2"}
-    )
-
-def run_with_pytorch_nn():
-    """Run pipeline with count vectorizer and PyTorch neural network."""
-    main(
-        feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
-        model_type=ModelType.PYTORCH_NEURAL_NETWORK,
-        use_class_weights=False,
-        extractor_kwargs={"max_features": 10000},
-        model_kwargs={"hidden_size": 128, "epochs": 50}
-    )
-
-def run_with_class_weights():
-    """Run pipeline with count vectorizer, logistic regression, and class weights."""
-    main(
-        feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
-        model_type=ModelType.LOGISTIC_REGRESSION,
-        use_class_weights=True,
-        extractor_kwargs={"max_features": 10000}
-    )
-
-def run_with_knn():
-    """Run pipeline with count vectorizer and KNN classifier."""
-    main(
-        feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
-        model_type=ModelType.KNN_CLASSIFIER,
-        use_class_weights=False,
-        extractor_kwargs={"max_features": 10000},
-        model_kwargs={"n_neighbors": 5, "weights": "uniform"}
-    )
 
 if __name__ == "__main__":
     # Configuration: Choose which feature extractor, model, and options to use
-    FEATURE_EXTRACTOR = FeatureExtractorType.COUNT_VECTORIZER  # or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
+    FEATURE_EXTRACTOR = FeatureExtractorType.COUNT_VECTORIZER  # or FeatureExtractorType.TFIDF_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
     MODEL = ModelType.LOGISTIC_REGRESSION  # or ModelType.PYTORCH_NEURAL_NETWORK or ModelType.KNN_CLASSIFIER
     USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
     
-    if USE_CLASS_WEIGHTS and FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.LOGISTIC_REGRESSION:
-        run_with_class_weights()
-    elif FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.LOGISTIC_REGRESSION:
-        run_with_count_vectorizer()
-    elif FEATURE_EXTRACTOR == FeatureExtractorType.HUGGINGFACE_TRANSFORMER and MODEL == ModelType.LOGISTIC_REGRESSION:
-        run_with_huggingface()
-    elif FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.PYTORCH_NEURAL_NETWORK:
-        run_with_pytorch_nn()
-    elif FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.KNN_CLASSIFIER:
-        run_with_knn()
-    else:
-        # General configuration approach
-        main(
-            feature_extractor_type=FEATURE_EXTRACTOR,
-            model_type=MODEL,
-            use_class_weights=USE_CLASS_WEIGHTS,
-            extractor_kwargs={"max_features": 10000} if FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER else {},
-            model_kwargs={
-                "hidden_size": 128, "epochs": 50
-            } if MODEL == ModelType.PYTORCH_NEURAL_NETWORK else {
-                "n_neighbors": 5, "weights": "uniform"
-            } if MODEL == ModelType.KNN_CLASSIFIER else {}
-        )
+    # Configure extractor and model arguments based on selection
+    extractor_kwargs = {}
+    model_kwargs = {}
+    
+    if FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER:
+        extractor_kwargs = {"max_features": 10000}
+    elif FEATURE_EXTRACTOR == FeatureExtractorType.TFIDF_VECTORIZER:
+        extractor_kwargs = {"max_features": 10000, "min_df": 2, "max_df": 0.8}
+    elif FEATURE_EXTRACTOR == FeatureExtractorType.HUGGINGFACE_TRANSFORMER:
+        extractor_kwargs = {"model_name": "sentence-transformers/all-MiniLM-L6-v2"}
+    
+    if MODEL == ModelType.PYTORCH_NEURAL_NETWORK:
+        model_kwargs = {"hidden_size": 128, "epochs": 50}
+    elif MODEL == ModelType.KNN_CLASSIFIER:
+        model_kwargs = {"n_neighbors": 5, "weights": "uniform"}
+    
+    # Run the main pipeline
+    main(
+        feature_extractor_type=FEATURE_EXTRACTOR,
+        model_type=MODEL,
+        use_class_weights=USE_CLASS_WEIGHTS,
+        extractor_kwargs=extractor_kwargs,
+        model_kwargs=model_kwargs
+    )

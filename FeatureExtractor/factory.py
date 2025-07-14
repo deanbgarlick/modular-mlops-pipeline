@@ -2,6 +2,7 @@
 
 from .base import FeatureExtractor, FeatureExtractorType
 from .count_vectorizer import CountVectorizerExtractor
+from .tfidf_vectorizer import TfidfVectorizerExtractor
 from .huggingface import HuggingFaceExtractor
 
 
@@ -20,6 +21,8 @@ def create_feature_extractor(extractor_type: FeatureExtractorType, **kwargs) -> 
     """
     if extractor_type == FeatureExtractorType.COUNT_VECTORIZER:
         return CountVectorizerExtractor(**kwargs)
+    elif extractor_type == FeatureExtractorType.TFIDF_VECTORIZER:
+        return TfidfVectorizerExtractor(**kwargs)
     elif extractor_type == FeatureExtractorType.HUGGINGFACE_TRANSFORMER:
         return HuggingFaceExtractor(**kwargs)
     else:

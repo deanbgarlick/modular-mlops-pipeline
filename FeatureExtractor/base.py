@@ -9,6 +9,7 @@ from typing import Tuple, Any
 class FeatureExtractorType(Enum):
     """Enum for different feature extraction methods."""
     COUNT_VECTORIZER = "count_vectorizer"
+    TFIDF_VECTORIZER = "tfidf_vectorizer"
     HUGGINGFACE_TRANSFORMER = "huggingface_transformer"
 
 

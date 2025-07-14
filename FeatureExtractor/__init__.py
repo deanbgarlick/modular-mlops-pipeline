@@ -6,13 +6,15 @@ supporting multiple extraction methods through a clean interface.
 
 from .base import FeatureExtractor, FeatureExtractorType
 from .count_vectorizer import CountVectorizerExtractor
+from .tfidf_vectorizer import TfidfVectorizerExtractor
 from .huggingface import HuggingFaceExtractor
 from .factory import create_feature_extractor
 
 __all__ = [
     'FeatureExtractor',
-    'FeatureExtractorType', 
+    'FeatureExtractorType',
     'CountVectorizerExtractor',
+    'TfidfVectorizerExtractor',
     'HuggingFaceExtractor',
     'create_feature_extractor'
 ] 
