@@ -1,6 +1,6 @@
 # Modular Text Classification Pipeline with Cloud Deployment
 
-A production-ready, extensible machine learning pipeline for text classification with cloud deployment capabilities, model persistence, and comprehensive experiment management.
+A production-ready, extensible machine learning pipeline for text classification with cloud deployment capabilities, model persistence, comprehensive experiment management, and **automated hyperparameter optimization**.
 
 ## 🚀 Quick Start
 
@@ -19,6 +19,11 @@ A production-ready, extensible machine learning pipeline for text classification
    ```bash
    # Edit main.py: set RUN_EXPERIMENTS = True
    python main.py
+   ```
+
+4. **Run hyperparameter optimization:**
+   ```bash
+   python test_hyperparameter_optimization.py
    ```
 
 ### Cloud Deployment (GCP)
@@ -59,6 +64,12 @@ The project uses **Strategy Pattern** and **Factory Functions** with comprehensi
 │   └── persistence.py           # Model save/load system
 ├── Pipeline/                      # Pipeline orchestration
 ├── Experiments/                   # Experiment management
+├── HyperparamPicker/              # Automated hyperparameter optimization
+│   ├── core.py                   # Main optimization engine (Ax integration)
+│   ├── config.py                 # Parameter space configuration
+│   ├── results.py                # Results analysis and Pareto frontier
+│   ├── metrics.py                # Custom Ax metrics
+│   └── runner.py                 # Pipeline integration for trials
 └── Infrastructure/               # Cloud deployment scripts
     ├── setup_service_account.sh  # ML training service account
     ├── setup_deployment_sa.sh    # Deployment service account
@@ -265,6 +276,285 @@ experiment_configs = [
 | Count Vectorizer | PyTorch NN | 96.3% | 96.2% | Moderate 🔥 | Deep learning |
 | HuggingFace | Logistic Regression | 88.9% | 88.6% | Slow 🐌 | Semantic features |
 
+## 🔍 Automated Hyperparameter Optimization
+
+### 🧠 Powered by Facebook's Ax Library
+
+The system includes comprehensive hyperparameter optimization using [Facebook AI Research's Ax](https://ax.dev/) library, featuring:
+
+- **Single & Multi-objective optimization**
+- **Bayesian optimization** with intelligent search strategies
+- **Parallel trial execution** for faster optimization
+- **Pareto frontier analysis** for multi-objective problems
+- **Automatic parameter space configuration**
+- **Production-ready result analysis**
+
+### 🎛️ Simple Usage
+
+```python
+from HyperparamPicker.factory import run_hyperparameter_optimization
+from DataLoader import DataSourceType
+from FeatureExtractor import FeatureExtractorType  
+from SupervisedModel import SupervisedModelType
+
+# Quick hyperparameter optimization
+results = run_hyperparameter_optimization(
+    data_source_type=DataSourceType.NEWSGROUPS,
+    feature_extractor_type=FeatureExtractorType.TFIDF_VECTORIZER,
+    model_type=SupervisedModelType.LOGISTIC_REGRESSION,
+    loader_kwargs={"categories": ['alt.atheism', 'soc.religion.christian']},
+    total_trials=20,
+    max_parallel_trials=4,
+    objectives=[("accuracy", False), ("training_time", True)]  # Maximize accuracy, minimize time
+)
+
+# Get best configurations
+best_configs = results.get_recommended_configs()
+```
+
+### 🎯 Single-Objective Optimization
+
+Optimize for a single metric (accuracy, F1-score, training time):
+
+```python
+from HyperparamPicker import create_hyperparam_picker, MultiObjectiveConfig
+
+# Single objective: maximize accuracy
+picker = create_hyperparam_picker(
+    multi_objective_config=MultiObjectiveConfig(
+        objectives=[("accuracy", False)]  # False = maximize
+    )
+)
+
+results = picker.optimize(
+    data_source_type=DataSourceType.NEWSGROUPS,
+    feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
+    model_type=SupervisedModelType.LOGISTIC_REGRESSION,
+    loader_kwargs={},
+    base_extractor_kwargs={},
+    base_model_kwargs={},
+    total_trials=30
+)
+```
+
+### 🎯 Multi-Objective Optimization
+
+Optimize multiple competing objectives simultaneously:
+
+```python
+# Multi-objective: maximize accuracy AND F1, minimize training time
+picker = create_hyperparam_picker(
+    multi_objective_config=MultiObjectiveConfig(
+        objectives=[
+            ("accuracy", False),      # Maximize accuracy
+            ("f1_macro", False),      # Maximize F1-score  
+            ("training_time", True)   # Minimize training time
+        ],
+        objective_thresholds={
+            "accuracy": 0.80,         # Minimum acceptable accuracy
+            "training_time": 300      # Maximum acceptable training time (seconds)
+        }
+    )
+)
+
+results = picker.optimize(
+    # ... same parameters as above ...
+    total_trials=50,
+    max_parallel_trials=8
+)
+
+# Analyze Pareto frontier
+print(f"Pareto frontier size: {len(results.pareto_frontier)}")
+print(f"Best accuracy: {results.best_single_objective['accuracy']}")
+print(f"Fastest training: {results.best_single_objective['training_time']}")
+```
+
+### ⚙️ Custom Parameter Spaces
+
+Define custom hyperparameter search spaces:
+
+```python
+from HyperparamPicker import HyperparamSearchConfig, ParameterSpec
+from ax.core import ParameterType
+
+# Custom search configuration
+search_config = HyperparamSearchConfig()
+
+# TF-IDF parameters
+search_config.feature_extractor_params[FeatureExtractorType.TFIDF_VECTORIZER] = {
+    "max_features": ParameterSpec(
+        name="max_features",
+        param_type="choice",
+        values=[1000, 5000, 10000, 20000, 50000],
+        parameter_type=ParameterType.INT,
+        is_ordered=True
+    ),
+    "min_df": ParameterSpec(
+        name="min_df", 
+        param_type="range",
+        lower=1,
+        upper=10,
+        parameter_type=ParameterType.INT
+    ),
+    "max_df": ParameterSpec(
+        name="max_df",
+        param_type="range", 
+        lower=0.5,
+        upper=0.95,
+        parameter_type=ParameterType.FLOAT
+    )
+}
+
+# Logistic Regression parameters
+search_config.model_params[SupervisedModelType.LOGISTIC_REGRESSION] = {
+    "C": ParameterSpec(
+        name="C",
+        param_type="range",
+        lower=0.001,
+        upper=10.0,
+        parameter_type=ParameterType.FLOAT,
+        log_scale=True  # Logarithmic scale for regularization
+    ),
+    "max_iter": ParameterSpec(
+        name="max_iter",
+        param_type="choice", 
+        values=[100, 200, 500, 1000, 2000],
+        parameter_type=ParameterType.INT,
+        is_ordered=True
+    )
+}
+
+# Use custom configuration
+picker = create_hyperparam_picker(search_config=search_config)
+```
+
+### 📊 Available Optimization Objectives
+
+| Objective | Description | Optimization Direction |
+|-----------|-------------|----------------------|
+| `accuracy` | Classification accuracy | Maximize |
+| `f1_macro` | Macro-averaged F1-score | Maximize |
+| `f1_weighted` | Weighted F1-score | Maximize |
+| `precision` | Precision score | Maximize |
+| `recall` | Recall score | Maximize |
+| `training_time` | Model training time (seconds) | Minimize |
+| `prediction_time` | Average prediction time | Minimize |
+| `model_size` | Model memory footprint | Minimize |
+
+### 🔧 Supported Parameter Types
+
+#### Range Parameters
+```python
+ParameterSpec(
+    name="learning_rate",
+    param_type="range",
+    lower=0.001,
+    upper=0.1,
+    parameter_type=ParameterType.FLOAT,
+    log_scale=True  # Use logarithmic scaling
+)
+```
+
+#### Choice Parameters
+```python
+ParameterSpec(
+    name="optimizer",
+    param_type="choice", 
+    values=["adam", "sgd", "adamw"],
+    parameter_type=ParameterType.STRING
+)
+```
+
+#### Fixed Parameters
+```python
+ParameterSpec(
+    name="random_state",
+    param_type="fixed",
+    value=42,
+    parameter_type=ParameterType.INT
+)
+```
+
+### 📈 Results Analysis
+
+```python
+# Run optimization
+results = picker.optimize(...)
+
+# Optimization history
+print(f"Total trials completed: {len(results.optimization_history)}")
+
+# Best single-objective results
+for objective, trial in results.best_single_objective.items():
+    print(f"Best {objective}: Trial {trial.index}")
+
+# Pareto frontier (multi-objective)
+print(f"Pareto frontier: {len(results.pareto_frontier)} optimal solutions")
+
+# Get recommendations based on preferences
+preferences = {"accuracy": 0.7, "training_time": 0.3}
+recommended = results.get_recommended_configs(preferences)
+
+# Export results
+results.export_results("hyperparameter_results.json")
+results.save_visualization("pareto_plot.png")
+```
+
+### 🏃‍♂️ Default Parameter Spaces
+
+The system comes with pre-configured parameter spaces for all models:
+
+#### **TF-IDF Vectorizer**
+- `max_features`: [1000, 5000, 10000, 20000, 50000]
+- `min_df`: Range(1, 10)
+- `max_df`: Range(0.5, 0.95)
+
+#### **Count Vectorizer**  
+- `max_features`: [1000, 5000, 10000, 20000, 50000]
+- `min_df`: Range(1, 10)
+- `max_df`: Range(0.5, 0.95)
+
+#### **HuggingFace Transformers**
+- `model_name`: ["sentence-transformers/all-MiniLM-L6-v2", "sentence-transformers/all-mpnet-base-v2"]
+- `batch_size`: [50, 100, 200]
+
+#### **Logistic Regression**
+- `C`: Range(0.001, 10.0, log_scale=True)
+- `max_iter`: [100, 200, 500, 1000]
+
+#### **PyTorch Neural Network**
+- `hidden_size`: Range(64, 512)
+- `learning_rate`: Range(0.0001, 0.1, log_scale=True)
+- `epochs`: [25, 50, 100]
+- `batch_size`: [32, 64, 128]
+
+#### **K-Nearest Neighbors**
+- `n_neighbors`: Range(3, 20)
+- `weights`: ["uniform", "distance"]
+
+### 🚀 Production Hyperparameter Optimization
+
+Combine with cloud deployment for large-scale optimization:
+
+```python
+# Local hyperparameter search
+results = run_hyperparameter_optimization(
+    data_source_type=DataSourceType.GCP_CSV_FILE,
+    feature_extractor_type=FeatureExtractorType.TFIDF_VECTORIZER,
+    model_type=SupervisedModelType.LOGISTIC_REGRESSION,
+    loader_kwargs={"bucket_name": "my-data", "file_path": "training_data.csv"},
+    total_trials=100,
+    max_parallel_trials=16,  # Parallel optimization
+    objectives=[("accuracy", False), ("f1_macro", False), ("training_time", True)]
+)
+
+# Deploy best configuration to GCP VM
+best_config = results.get_recommended_configs()[0]
+# Use best_config parameters in deploy.py
+```
+
+The hyperparameter optimization system provides production-ready automated ML tuning with minimal configuration, supporting both single and multi-objective optimization scenarios.
+
 ## 🔌 Extensibility
 
 ### Adding New Feature Extractors
@@ -343,5 +633,23 @@ GOOGLE_APPLICATION_CREDENTIALS=deployment-key.json
 - **Training results:** Automatically saved to GCS bucket
 - **Error debugging:** Complete startup logs preserved in cloud storage
 - **Resource monitoring:** GCP Console for VM metrics and costs
+- **Hyperparameter optimization:** Bayesian optimization with Pareto frontier analysis
 
-This architecture provides a complete MLOps solution with local development capabilities, cloud deployment automation, comprehensive monitoring, and production-ready security practices. 
+## 🛠️ Key Features
+
+- ✅ **Modular Design** - Mix and match any feature extractor with any model
+- ✅ **Type Safety** - Enum-based configuration prevents errors
+- ✅ **Clean Interface** - Consistent API across all components
+- ✅ **Factory Functions** - Centralized object creation
+- ✅ **Package Organization** - Clean separation of concerns
+- ✅ **Extensible** - Easy to add new extractors and models
+- ✅ **Performance Metrics** - Comprehensive evaluation
+- ✅ **Deep Learning Ready** - PyTorch neural network support
+- ✅ **Imbalance Handling** - Automatic class weighting for better F1-scores
+- ✅ **Model Persistence** - Save/load models across multiple storage backends
+- ✅ **Cloud Deployment** - Automated GCP VM deployment with monitoring
+- ✅ **Hyperparameter Optimization** - Automated Bayesian optimization with Ax
+- ✅ **Multi-objective Optimization** - Pareto frontier analysis for competing objectives
+- ✅ **Production Ready** - Complete MLOps pipeline with security and monitoring
+
+This architecture provides a complete MLOps solution with local development capabilities, cloud deployment automation, comprehensive monitoring, automated hyperparameter optimization, and production-ready security practices. 
