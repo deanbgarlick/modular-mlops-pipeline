@@ -15,21 +15,54 @@ class PipelineStep:
     
     This class acts as an adapter that allows FeatureExtractors to work seamlessly 
     in DataFrame-based pipelines by automatically extracting the specified feature columns
-    and converting outputs to DataFrames.
+    and converting outputs to DataFrames. Supports flexible column selection including
+    wildcard patterns (e.g., "text*" to match all columns starting with "text").
     """
     
     def __init__(self, feature_extractor: FeatureExtractor, included_features: List[str] = ["*"],
+                 excluded_features: Optional[List[str]] = None,
                  persistence: Optional[PipelineStepPersistence] = None):
         """
         Initialize the pipeline step.
         
         Args:
             feature_extractor: The FeatureExtractor instance to wrap
-            included_features: List of column names to include as features from input DataFrames
+            included_features: List of column names/patterns to include as features. 
+                             Use ["*"] for all columns. Supports wildcard patterns like "text*" 
+                             to match all columns starting with "text".
+            excluded_features: List of column names/patterns to exclude from features (applied after included_features).
+                                Also supports wildcard patterns like "meta*" to exclude all columns starting with "meta".
             persistence: PipelineStep persistence handler for saving/loading
+        
+        Examples:
+            # Include all columns
+            PipelineStep(extractor)
+            
+            # Include specific columns
+            PipelineStep(extractor, included_features=["title", "content"])
+            
+            # Include all columns starting with "text"
+            PipelineStep(extractor, included_features=["text*"])
+            
+            # Include all columns starting with "text" or "desc" 
+            PipelineStep(extractor, included_features=["text*", "desc*"])
+            
+            # Include all except specific columns
+            PipelineStep(extractor, excluded_features=["id", "timestamp"])
+            
+            # Exclude all metadata columns
+            PipelineStep(extractor, excluded_features=["meta*", "internal*"])
+            
+            # Combine patterns and exclusions
+            PipelineStep(extractor, included_features=["text*"], excluded_features=["text_id"])
+            
+            # Complex example: include all text columns but exclude metadata
+            PipelineStep(extractor, included_features=["text*", "content*"], 
+                        excluded_features=["text_metadata", "content_meta*"])
         """
         self.feature_extractor = feature_extractor
         self.included_features = included_features
+        self.excluded_features = excluded_features or []
         self.persistence = persistence
     
     def _convert_to_dataframe(self, features: FeatureMatrix, prefix: str = "feature") -> pd.DataFrame:
@@ -72,6 +105,64 @@ class PipelineStep:
         # Fallback for other types
         raise ValueError(f"Unsupported feature type: {type(features)}")
     
+    def _get_columns_to_use(self, df: pd.DataFrame) -> List[str]:
+        """
+        Determine which columns to use based on included_features and excluded_features.
+        Supports wildcard patterns like "foo*" to match columns starting with "foo".
+        
+        Args:
+            df: DataFrame to determine columns for
+            
+        Returns:
+            List of column names to use
+        """
+        # Expand included patterns to actual column names
+        columns_to_use = self._expand_column_patterns(df, self.included_features)
+        
+        # Remove any excluded columns (with wildcard support)
+        columns_to_exclude = self._expand_column_patterns(df, self.excluded_features)
+        columns_to_use = [col for col in columns_to_use if col not in columns_to_exclude]
+        
+        # Check that we have columns to work with
+        if not columns_to_use:
+            raise ValueError("No columns left after applying included_features and excluded_features filters")
+        
+        # Validate that included patterns matched something
+        original_included_count = len(self._expand_column_patterns(df, self.included_features))
+        if original_included_count == 0 and self.included_features != ["*"]:
+            raise ValueError(f"No columns found matching included patterns: {self.included_features}")
+        
+        return columns_to_use
+    
+    def _expand_column_patterns(self, df: pd.DataFrame, patterns: List[str]) -> List[str]:
+        """
+        Expand a list of column patterns (including wildcards) to actual column names.
+        
+        Args:
+            df: DataFrame to match patterns against
+            patterns: List of column names/patterns (e.g., ["text*", "id", "meta*"])
+            
+        Returns:
+            List of actual column names that match the patterns
+        """
+        expanded_columns = []
+        for pattern in patterns:
+            if pattern.endswith("*") and pattern != "*":
+                # Wildcard pattern - match columns starting with prefix
+                prefix = pattern[:-1]  # Remove the trailing *
+                matched_columns = [col for col in df.columns if col.startswith(prefix)]
+                expanded_columns.extend(matched_columns)
+            elif pattern == "*":
+                # Special case: include all columns
+                expanded_columns.extend(df.columns.tolist())
+            else:
+                # Exact column name
+                if pattern in df.columns:
+                    expanded_columns.append(pattern)
+        
+        # Remove duplicates while preserving order
+        return list(dict.fromkeys(expanded_columns))
+    
     def _extract_feature_data(self, df: pd.DataFrame) -> List[str]:
         """
         Extract and combine feature data from DataFrame columns.
@@ -82,19 +173,14 @@ class PipelineStep:
         Returns:
             List of combined text strings from the specified columns
         """
-        missing_columns = [col for col in self.included_features if col not in df.columns]
-        if missing_columns:
-            raise ValueError(f"Columns {missing_columns} not found in DataFrame")
+        columns_to_use = self._get_columns_to_use(df)
         
         # If single column, return as list of strings
-        if len(self.included_features) == 1:
-            if self.included_features[0] == "*":
-                return df.astype(str).tolist()
-            else:
-                return df[self.included_features[0]].astype(str).tolist()
+        if len(columns_to_use) == 1:
+            return df[columns_to_use[0]].astype(str).tolist()
         
         # If multiple columns, concatenate them with space separator
-        combined_series = df[self.included_features].astype(str).apply(
+        combined_series = df[columns_to_use].astype(str).apply(
             lambda row: ' '.join(row.values), axis=1
         )
         return combined_series.tolist()
@@ -123,7 +209,8 @@ class PipelineStep:
         train_features, test_features = self.feature_extractor.fit_transform(train_series, test_series)
         
         # Convert to DataFrames with meaningful prefix
-        feature_prefix = "_".join(self.included_features) if len(self.included_features) <= 3 else "features"
+        columns_to_use = self._get_columns_to_use(X_train)
+        feature_prefix = "_".join(columns_to_use) if len(columns_to_use) <= 3 else "features"
         train_features_df = self._convert_to_dataframe(train_features, feature_prefix)
         test_features_df = self._convert_to_dataframe(test_features, feature_prefix) 
         
@@ -148,7 +235,8 @@ class PipelineStep:
         features = self.feature_extractor.transform(text_data)
         
         # Convert to DataFrame with meaningful prefix
-        feature_prefix = "_".join(self.included_features) if len(self.included_features) <= 3 else "features"
+        columns_to_use = self._get_columns_to_use(X)
+        feature_prefix = "_".join(columns_to_use) if len(columns_to_use) <= 3 else "features"
         features_df = self._convert_to_dataframe(features, feature_prefix)
         
         # Combine original DataFrame with feature DataFrame
@@ -160,6 +248,7 @@ class PipelineStep:
         # Add pipeline step information
         if isinstance(feature_info, dict) and "error" not in feature_info:
             feature_info["included_features"] = self.included_features
+            feature_info["excluded_features"] = self.excluded_features
             feature_info["pipeline_step"] = True
         return feature_info
     
@@ -190,6 +279,7 @@ class PipelineStep:
         # Update current instance with loaded data
         self.feature_extractor = loaded_pipeline_step.feature_extractor
         self.included_features = loaded_pipeline_step.included_features
+        self.excluded_features = loaded_pipeline_step.excluded_features
     
     @classmethod
     def load_from_path(cls, path: str, persistence: PipelineStepPersistence):

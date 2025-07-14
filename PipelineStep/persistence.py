@@ -49,6 +49,7 @@ class BasePipelineStepPersistence(PipelineStepPersistence):
         return {
             'pipeline_step_metadata': {
                 'included_features': pipeline_step.included_features,
+                'excluded_features': pipeline_step.excluded_features,
                 'version': '1.0'
             },
             'feature_extractor_metadata': {
@@ -170,7 +171,11 @@ class BasePipelineStepPersistence(PipelineStepPersistence):
         
         # Reconstruct PipelineStep
         from .pipeline_step import PipelineStep
-        pipeline_step = PipelineStep(feature_extractor, ps_metadata['included_features'])
+        pipeline_step = PipelineStep(
+            feature_extractor, 
+            ps_metadata['included_features'],
+            ps_metadata.get('excluded_features', [])
+        )
         
         print(f"PipelineStep loaded from {self._get_storage_info()}/{path}")
         return pipeline_step
