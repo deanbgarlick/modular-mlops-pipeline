@@ -1,0 +1,22 @@
+"""Pipeline Package for Text Classification.
+
+This package provides the core machine learning pipeline functionality
+for text classification, including data preparation, feature creation,
+model training, and evaluation.
+"""
+
+from .pipeline import (
+    prepare_data,
+    create_features, 
+    train_model,
+    evaluate_model,
+    run_pipeline
+)
+
+__all__ = [
+    'prepare_data',
+    'create_features',
+    'train_model', 
+    'evaluate_model',
+    'run_pipeline'
+] 
