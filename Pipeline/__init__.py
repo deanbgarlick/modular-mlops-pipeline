@@ -7,16 +7,16 @@ model training, and evaluation.
 
 from .run_pipeline import (
     prepare_data,
-    create_features, 
-    train_model,
+    # create_features, 
+    # train_model,
     evaluate_model,
     run_pipeline
 )
 
 __all__ = [
     'prepare_data',
-    'create_features',
-    'train_model', 
+    # 'create_features',
+    # 'train_model', 
     'evaluate_model',
     'run_pipeline'
 ] 

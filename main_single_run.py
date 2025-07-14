@@ -49,7 +49,7 @@ def run_single_experiment(persistence_config):
     
     # Single run configuration
     DATA_SOURCE = DataSourceType.NEWSGROUPS  # or DataSourceType.CSV_FILE or DataSourceType.GCP_CSV_FILE
-    FEATURE_EXTRACTOR = FeatureExtractorType.TFIDF_VECTORIZER  # or FeatureExtractorType.COUNT_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
+    FEATURE_EXTRACTOR = FeatureExtractorType.HUGGINGFACE_TRANSFORMER  # or FeatureExtractorType.COUNT_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
     MODEL = SupervisedModelType.LOGISTIC_REGRESSION  # or SupervisedModelType.PYTORCH_NEURAL_NETWORK or SupervisedModelType.KNN_CLASSIFIER
     USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
     
@@ -93,7 +93,7 @@ def run_single_experiment(persistence_config):
     elif MODEL == SupervisedModelType.KNN_CLASSIFIER:
         model_kwargs = {"n_neighbors": 5, "weights": "uniform"}
     
-    # Run the main pipeline with persistence
+    # Run the main pipeline (persistence removed from run_pipeline)
     results = run_pipeline(
         data_source_type=DATA_SOURCE,
         feature_extractor_type=FEATURE_EXTRACTOR,
@@ -101,36 +101,33 @@ def run_single_experiment(persistence_config):
         use_class_weights=USE_CLASS_WEIGHTS,
         loader_kwargs=loader_kwargs,
         extractor_kwargs=extractor_kwargs,
-        model_kwargs=model_kwargs,
-        # Persistence configuration
-        **persistence_config,
-        artifact_prefix="single_exp_"
+        model_kwargs=model_kwargs
     )
     
     print(f"\n🎉 Single Experiment Complete!")
     print(f"Final Results: Accuracy={results['accuracy']:.4f}, F1-Macro={results['f1_macro']:.4f}")
     
-    # Show artifact information
-    if results.get('saved_paths'):
-        saved_paths = results['saved_paths']
-        print(f"\n💾 Saved Artifacts:")
-        print(f"  Extractor: {saved_paths['extractor_path']}")
-        print(f"  Model: {saved_paths['model_path']}")
-        print(f"  Storage: {saved_paths['bucket']}")
-        print(f"  Artifact ID: {saved_paths['artifact_name']}")
+    # Note: Persistence functionality has been removed from run_pipeline
+    # The persistence setup code is kept for future use if needed
+    if persistence_config['save_artifacts']:
+        print(f"\n💾 Note: Artifact saving was requested but persistence has been removed from run_pipeline")
+        print(f"  To restore persistence functionality, integrate the persistence code back into run_pipeline")
     
     return results
 
 
 def demonstrate_persistence_features():
-    """Demonstrate advanced persistence features."""
+    """Demonstrate advanced persistence features (currently disabled)."""
     print("\n" + "="*60)
-    print("PERSISTENCE FEATURES DEMO")
+    print("PERSISTENCE FEATURES DEMO (Currently Disabled)")
     print("="*60)
     
     persistence_config = setup_persistence_environment()
     
-    print("\n📝 Usage Examples:")
+    print("\n⚠️  Note: Persistence functionality has been removed from run_pipeline")
+    print("   The setup code below is preserved for future integration")
+    
+    print("\n📝 Usage Examples (when persistence is restored):")
     print("1. Train and save artifacts:")
     print("   python main_single_run.py  # Trains models and saves to GCP/local storage")
     
@@ -171,7 +168,7 @@ if __name__ == "__main__":
     persistence_config = setup_persistence_environment()
     
     # Configuration
-    SHOW_PERSISTENCE_DEMO = True  # Set to True to show persistence features
+    SHOW_PERSISTENCE_DEMO = False  # Set to True to show persistence features
     
     # Show persistence demo if enabled
     if SHOW_PERSISTENCE_DEMO:
@@ -185,12 +182,12 @@ if __name__ == "__main__":
     
     # Show next steps
     print("\n🔄 Next Steps:")
-    if persistence_config['save_artifacts']:
-        print("   • Check your GCP bucket or local storage for saved artifacts")
-        print("   • Run again with FORCE_RETRAIN=false to load existing artifacts")
-        print("   • Use saved artifacts for production inference")
-    
     print("   • Experiment with different configurations")
     print("   • Run experiment suite using: python main_experiment_run.py")
     print("   • Deploy to GCP VMs using: python deploy.py")
-    print("   • Run hyperparameter optimization: python test_hyperparameter_optimization.py") 
+    print("   • Run hyperparameter optimization: python test_hyperparameter_optimization.py")
+    
+    if persistence_config['save_artifacts']:
+        print("\n📝 Note: Persistence functionality has been removed from run_pipeline")
+        print("   • To restore artifact saving, integrate persistence code back into run_pipeline")
+        print("   • Current persistence setup code is preserved for future use") 

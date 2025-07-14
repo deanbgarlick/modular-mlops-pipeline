@@ -8,10 +8,10 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from typing import Optional, Dict, Any
 
 from FeatureExtractor import (
-    FeatureExtractor, FeatureExtractorType, create_feature_extractor
+    FeatureExtractorType, create_feature_extractor
 )
 from SupervisedModel import (
-    SupervisedModel, SupervisedModelType, create_model
+    SupervisedModelType, create_model
 )
 from DataLoader import DataSourceType, create_data_loader
 from PipelineStep.pipeline_step import PipelineStep
