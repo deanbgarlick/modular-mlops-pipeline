@@ -2,9 +2,12 @@
 
 import pickle
 import io
-from abc import ABC, abstractmethod
-from typing import Any, Optional
 import os
+from abc import ABC, abstractmethod
+from typing import Any, Optional, Union, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from google.cloud import storage
 
 
 class FeatureExtractorPersistence(ABC):
@@ -38,38 +41,39 @@ class FeatureExtractorPersistence(ABC):
 class PickleGCPExtractorPersistence(FeatureExtractorPersistence):
     """GCP bucket persistence for feature extractors using pickle serialization."""
     
-    def __init__(self, bucket_name: str, credentials_path: Optional[str] = None, prefix: str = "feature_extractors/"):
+    def __init__(self, bucket_name: str, prefix: str = "feature_extractors/"):
         """
         Initialize GCP bucket persistence with pickle serialization.
         
+        Uses environment variables for authentication:
+        - GOOGLE_APPLICATION_CREDENTIALS: Path to service account JSON file (optional)
+        - Or uses default credentials (gcloud auth, service account, etc.)
+        
         Args:
             bucket_name: Name of the GCP bucket
-            credentials_path: Path to GCP credentials JSON file (optional)
             prefix: Prefix path within bucket for feature extractors
         """
         self.bucket_name = bucket_name
-        self.credentials_path = credentials_path
         self.prefix = prefix
         self._client = None
         self._bucket = None
     
-    def _get_client(self):
+    def _get_client(self) -> Tuple[Any, Any]:
         """Lazy initialization of GCP client."""
         if self._client is None:
             try:
-                from google.cloud import storage
-                if self.credentials_path:
-                    self._client = storage.Client.from_service_account_json(self.credentials_path)
-                else:
-                    self._client = storage.Client()
+                from google.cloud import storage  # type: ignore
+                # Use default credentials from environment
+                self._client = storage.Client()
                 self._bucket = self._client.bucket(self.bucket_name)
             except ImportError:
                 raise ImportError("google-cloud-storage package is required for GCP persistence")
-        return self._client
+        assert self._client is not None and self._bucket is not None
+        return self._client, self._bucket
     
     def save(self, extractor: Any, path: str) -> None:
         """Save feature extractor to GCP bucket using pickle."""
-        self._get_client()
+        client, bucket = self._get_client()
         
         # Add prefix to path
         full_path = f"{self.prefix}{path}"
@@ -80,20 +84,20 @@ class PickleGCPExtractorPersistence(FeatureExtractorPersistence):
         buffer.seek(0)
         
         # Upload to GCP bucket
-        blob = self._bucket.blob(full_path)
+        blob = bucket.blob(full_path)
         blob.upload_from_file(buffer, content_type='application/octet-stream')
         
         print(f"Feature extractor saved to GCP bucket: gs://{self.bucket_name}/{full_path}")
     
     def load(self, path: str) -> Any:
         """Load feature extractor from GCP bucket using pickle."""
-        self._get_client()
+        client, bucket = self._get_client()
         
         # Add prefix to path
         full_path = f"{self.prefix}{path}"
         
         # Download from GCP bucket
-        blob = self._bucket.blob(full_path)
+        blob = bucket.blob(full_path)
         buffer = io.BytesIO()
         blob.download_to_file(buffer)
         buffer.seek(0)
@@ -107,40 +111,32 @@ class PickleGCPExtractorPersistence(FeatureExtractorPersistence):
 class PickleAWSExtractorPersistence(FeatureExtractorPersistence):
     """AWS S3 bucket persistence for feature extractors using pickle serialization."""
     
-    def __init__(self, bucket_name: str, region: str = 'us-east-1', 
-                 access_key_id: Optional[str] = None, secret_access_key: Optional[str] = None,
-                 prefix: str = "feature_extractors/"):
+    def __init__(self, bucket_name: str, prefix: str = "feature_extractors/"):
         """
         Initialize AWS S3 persistence with pickle serialization.
         
+        Uses environment variables for configuration:
+        - AWS_DEFAULT_REGION or AWS_REGION: AWS region (defaults to 'us-east-1')
+        - AWS_ACCESS_KEY_ID: AWS access key ID (optional, can use IAM roles)
+        - AWS_SECRET_ACCESS_KEY: AWS secret access key (optional, can use IAM roles)
+        - AWS_PROFILE: AWS profile name (optional)
+        
         Args:
             bucket_name: Name of the S3 bucket
-            region: AWS region
-            access_key_id: AWS access key ID (optional, can use env vars)
-            secret_access_key: AWS secret access key (optional, can use env vars)
             prefix: Prefix path within bucket for feature extractors
         """
         self.bucket_name = bucket_name
-        self.region = region
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
         self.prefix = prefix
+        self.region = os.getenv('AWS_DEFAULT_REGION') or os.getenv('AWS_REGION', 'us-east-1')
         self._client = None
     
     def _get_client(self):
         """Lazy initialization of AWS client."""
         if self._client is None:
             try:
-                import boto3
-                if self.access_key_id and self.secret_access_key:
-                    self._client = boto3.client(
-                        's3',
-                        region_name=self.region,
-                        aws_access_key_id=self.access_key_id,
-                        aws_secret_access_key=self.secret_access_key
-                    )
-                else:
-                    self._client = boto3.client('s3', region_name=self.region)
+                import boto3  # type: ignore
+                # boto3 will automatically use environment variables and IAM roles
+                self._client = boto3.client('s3', region_name=self.region)
             except ImportError:
                 raise ImportError("boto3 package is required for AWS persistence")
         return self._client
@@ -222,22 +218,21 @@ class PickleLocalExtractorPersistence(FeatureExtractorPersistence):
 class HuggingFaceExtractorPersistence(FeatureExtractorPersistence):
     """Specialized persistence for HuggingFace transformers with proper model handling."""
     
-    def __init__(self, bucket_name: str = None, credentials_path: Optional[str] = None, 
-                 base_path: str = "feature_extractors", use_gcp: bool = True):
+    def __init__(self, bucket_name: Optional[str] = None, base_path: str = "feature_extractors", 
+                 use_gcp: bool = True):
         """
         Initialize HuggingFace transformer persistence.
         
         Args:
-            bucket_name: GCP bucket name (if using cloud storage)
-            credentials_path: Path to GCP credentials JSON file (optional)
+            bucket_name: GCP/AWS bucket name (if using cloud storage)
             base_path: Local base directory for storing extractors
             use_gcp: Whether to use GCP storage (True) or local storage (False)
         """
         self.use_gcp = use_gcp and bucket_name is not None
         
-        if self.use_gcp:
+        if self.use_gcp and bucket_name is not None:
             self.gcp_persistence = PickleGCPExtractorPersistence(
-                bucket_name, credentials_path, prefix="huggingface_extractors/"
+                bucket_name, prefix="huggingface_extractors/"
             )
         else:
             self.local_persistence = PickleLocalExtractorPersistence(

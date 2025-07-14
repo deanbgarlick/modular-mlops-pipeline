@@ -5,9 +5,9 @@ import numpy as np
 import scipy.sparse
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Tuple, Any, Optional, Union, List
+from typing import Tuple, Optional, Union, List
 
-from .persistence import FeatureExtractorPersistence, PickleGCPExtractorPersistence, HuggingFaceExtractorPersistence
+from .persistence import FeatureExtractorPersistence
 
 # Type alias for feature matrices that can be returned by extractors
 FeatureMatrix = Union[np.ndarray, scipy.sparse.csr_matrix, pd.DataFrame]
