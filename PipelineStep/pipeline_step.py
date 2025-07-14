@@ -238,6 +238,10 @@ class PipelineStep:
         train_features_df = self._convert_to_dataframe(train_features, feature_prefix)
         test_features_df = self._convert_to_dataframe(test_features, feature_prefix) 
         
+        # Ensure indices match for proper row alignment during concatenation
+        train_features_df.index = X_train.index
+        test_features_df.index = X_test.index
+        
         # Combine original DataFrames with feature DataFrames
         train_combined = pd.concat([X_train, train_features_df], axis=1)
         test_combined = pd.concat([X_test, test_features_df], axis=1)
@@ -256,7 +260,7 @@ class PipelineStep:
             train_target = y_train.values
         else:
             train_target = X_train[self.target_column].values  # type: ignore[index]
-        
+
         # Fit the model
         self.component.fit(train_features, train_target)  # type: ignore[attr-defined,arg-type]
         
@@ -278,6 +282,10 @@ class PipelineStep:
                 prob_col = f"{self.prediction_column}_proba_{i}"
                 train_pred_df[prob_col] = train_proba[:, i]
                 test_pred_df[prob_col] = test_proba[:, i]
+        
+        # Ensure indices match for proper row alignment during concatenation
+        train_pred_df.index = X_train.index
+        test_pred_df.index = X_test.index
         
         # Combine original DataFrames with prediction DataFrames
         train_combined = pd.concat([X_train, train_pred_df], axis=1)
@@ -313,6 +321,9 @@ class PipelineStep:
         feature_prefix = "_".join(columns_to_use) if len(columns_to_use) <= 3 else "features"
         features_df = self._convert_to_dataframe(features, feature_prefix)
         
+        # Ensure indices match for proper row alignment during concatenation
+        features_df.index = X.index
+        
         # Combine original DataFrame with feature DataFrame
         return pd.concat([X, features_df], axis=1)
     
@@ -335,6 +346,9 @@ class PipelineStep:
             for i in range(proba.shape[1]):
                 prob_col = f"{self.prediction_column}_proba_{i}"
                 pred_df[prob_col] = proba[:, i]
+        
+        # Ensure indices match for proper row alignment during concatenation
+        pred_df.index = X.index
         
         # Combine original DataFrame with prediction DataFrame
         return pd.concat([X, pred_df], axis=1)

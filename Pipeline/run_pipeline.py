@@ -36,7 +36,7 @@ def prepare_data(df, test_size=0.2, random_state=42):
 def evaluate_model(y_true, y_pred, target_names):
     """Evaluate predictions."""
     print(f"\nEvaluating model on test set...")
-    
+
     # Calculate metrics
     accuracy = accuracy_score(y_true, y_pred)
     f1_macro = f1_score(y_true, y_pred, average='macro')
@@ -151,32 +151,34 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     print(f"\nTraining pipeline...")
     
     # Add class weights to model if requested
-    if use_class_weights:
-         from sklearn.utils.class_weight import compute_class_weight
-         classes = np.unique(train_df['target'].values)  # type: ignore[index]
-         weights = compute_class_weight('balanced', classes=classes, y=train_df['target'].values)  # type: ignore[index]
-         class_weights = dict(zip(classes, weights))
-         print(f"Calculated class weights: {class_weights}")
-         # Note: Pipeline doesn't currently support class weights in fit_transform
-    
+    # if use_class_weights:
+    #      from sklearn.utils.class_weight import compute_class_weight
+    #      classes = np.unique(train_df['target'].values)  # type: ignore[index]
+    #      weights = compute_class_weight('balanced', classes=classes, y=train_df['target'].values)  # type: ignore[index]
+    #      class_weights = dict(zip(classes, weights))
+    #      print(f"Calculated class weights: {class_weights}")
+    #     # Note: Pipeline doesn't currently support class weights in fit_transform
+
+    train_df = train_df.dropna()
+    test_df = test_df.dropna()
+
     # Fit and transform training data, transform test data with explicit targets
     train_transformed, test_transformed = pipeline.fit_transform(
         train_df, test_df, 
-        y_train=train_df['target'].values,  # type: ignore[index]
-        y_test=test_df['target'].values  # type: ignore[index]
+        y_train=train_df['target'],  # type: ignore[index]
+        y_test=test_df['target']  # type: ignore[index]
     )
-    print("Pipeline training completed!")
-    
+
     # Make predictions on test set
     # The final transformed data should be predictions from the model
     # Convert to numpy array for consistent handling
-    if hasattr(test_transformed, 'toarray'):
+    if hasattr(test_transformed.prediction, 'toarray'):
         # Handle sparse matrix
-        y_pred = test_transformed.toarray().flatten()  # type: ignore[attr-defined]
-    elif hasattr(test_transformed, 'flatten'):
-        y_pred = test_transformed.flatten()  # type: ignore[attr-defined]
+        y_pred = test_transformed.prediction.toarray().flatten()  # type: ignore[attr-defined]
+    elif hasattr(test_transformed.prediction, 'flatten'):
+        y_pred = test_transformed.prediction.flatten()  # type: ignore[attr-defined]
     else:
-        y_pred = np.array(test_transformed).flatten()
+        y_pred = np.array(test_transformed.prediction).flatten()
     
     # Convert predictions to class indices if they're probabilities
     if y_pred.ndim > 1 or (y_pred.dtype == float and len(np.unique(y_pred)) > len(target_names)):
