@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
@@ -61,10 +62,20 @@ def create_features(X_train, X_test, feature_extractor: FeatureExtractor):
     
     return X_train_transformed, X_test_transformed, feature_extractor
 
-def train_model(X_train, y_train, model: Model):
-    """Train the specified model."""
+def train_model(X_train, y_train, model: Model, use_class_weights: bool = False):
+    """Train the specified model with optional class weighting."""
     print(f"\nTraining model...")
-    model.fit(X_train, y_train)
+    
+    class_weights = None
+    if use_class_weights:
+        # Calculate class weights
+        from sklearn.utils.class_weight import compute_class_weight
+        classes = np.unique(y_train)
+        weights = compute_class_weight('balanced', classes=classes, y=y_train)
+        class_weights = dict(zip(classes, weights))
+        print(f"Calculated class weights: {class_weights}")
+    
+    model.fit(X_train, y_train, class_weights=class_weights)
     
     # Print model info
     model_info = model.get_model_info()
@@ -97,6 +108,7 @@ def evaluate_model(model, X_test, y_test, target_names):
 
 def main(feature_extractor_type: FeatureExtractorType = FeatureExtractorType.COUNT_VECTORIZER,
          model_type: ModelType = ModelType.LOGISTIC_REGRESSION,
+         use_class_weights: bool = False,
          extractor_kwargs: Optional[Dict[str, Any]] = None, 
          model_kwargs: Optional[Dict[str, Any]] = None):
     """Main function to run the complete pipeline."""
@@ -128,7 +140,7 @@ def main(feature_extractor_type: FeatureExtractorType = FeatureExtractorType.COU
     model = create_model(model_type, **model_kwargs)
     
     # Train model
-    trained_model = train_model(X_train_transformed, y_train, model)
+    trained_model = train_model(X_train_transformed, y_train, model, use_class_weights)
     
     # Evaluate model
     y_pred, accuracy = evaluate_model(trained_model, X_test_transformed, y_test, target_names)
@@ -154,6 +166,7 @@ def run_with_count_vectorizer():
     main(
         feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
         model_type=ModelType.LOGISTIC_REGRESSION,
+        use_class_weights=False,
         extractor_kwargs={"max_features": 10000}
     )
 
@@ -162,6 +175,7 @@ def run_with_huggingface():
     main(
         feature_extractor_type=FeatureExtractorType.HUGGINGFACE_TRANSFORMER,
         model_type=ModelType.LOGISTIC_REGRESSION,
+        use_class_weights=False,
         extractor_kwargs={"model_name": "sentence-transformers/all-MiniLM-L6-v2"}
     )
 
@@ -170,16 +184,29 @@ def run_with_pytorch_nn():
     main(
         feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
         model_type=ModelType.PYTORCH_NEURAL_NETWORK,
+        use_class_weights=False,
         extractor_kwargs={"max_features": 10000},
         model_kwargs={"hidden_size": 128, "epochs": 50}
     )
 
+def run_with_class_weights():
+    """Run pipeline with count vectorizer, logistic regression, and class weights."""
+    main(
+        feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
+        model_type=ModelType.LOGISTIC_REGRESSION,
+        use_class_weights=True,
+        extractor_kwargs={"max_features": 10000}
+    )
+
 if __name__ == "__main__":
-    # Configuration: Choose which feature extractor and model to use
+    # Configuration: Choose which feature extractor, model, and options to use
     FEATURE_EXTRACTOR = FeatureExtractorType.COUNT_VECTORIZER  # or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
     MODEL = ModelType.LOGISTIC_REGRESSION  # or ModelType.PYTORCH_NEURAL_NETWORK
+    USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
     
-    if FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.LOGISTIC_REGRESSION:
+    if USE_CLASS_WEIGHTS and FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.LOGISTIC_REGRESSION:
+        run_with_class_weights()
+    elif FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.LOGISTIC_REGRESSION:
         run_with_count_vectorizer()
     elif FEATURE_EXTRACTOR == FeatureExtractorType.HUGGINGFACE_TRANSFORMER and MODEL == ModelType.LOGISTIC_REGRESSION:
         run_with_huggingface()
@@ -190,6 +217,7 @@ if __name__ == "__main__":
         main(
             feature_extractor_type=FEATURE_EXTRACTOR,
             model_type=MODEL,
+            use_class_weights=USE_CLASS_WEIGHTS,
             extractor_kwargs={"max_features": 10000} if FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER else {},
             model_kwargs={"hidden_size": 128, "epochs": 50} if MODEL == ModelType.PYTORCH_NEURAL_NETWORK else {}
         )

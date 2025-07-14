@@ -1,7 +1,7 @@
 """PyTorch neural network model implementation."""
 
 import numpy as np
-from typing import Any
+from typing import Any, Optional
 import warnings
 
 from .base import Model
@@ -58,8 +58,8 @@ class PyTorchNeuralNetwork(Model):
         
         return BinaryClassifier(input_size, self.hidden_size)
     
-    def fit(self, X_train: Any, y_train: Any) -> None:
-        """Train the PyTorch neural network model."""
+    def fit(self, X_train: Any, y_train: Any, class_weights: Optional[dict] = None) -> None:
+        """Train the PyTorch neural network model with optional class weights."""
         torch, nn, optim, DataLoader, TensorDataset = self._check_pytorch_available()
         
         print("Training PyTorch neural network model...")
@@ -91,8 +91,16 @@ class PyTorchNeuralNetwork(Model):
         dataset = TensorDataset(X_tensor, y_tensor)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         
-        # Define loss and optimizer
-        criterion = nn.CrossEntropyLoss()
+        # Define loss and optimizer with optional class weights
+        if class_weights:
+            print(f"Using class weights: {class_weights}")
+            # Convert class weights to tensor
+            weight_list = [class_weights[i] for i in sorted(class_weights.keys())]
+            weight_tensor = torch.FloatTensor(weight_list).to(self.device)
+            criterion = nn.CrossEntropyLoss(weight=weight_tensor)
+        else:
+            criterion = nn.CrossEntropyLoss()
+            
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         
         # Training loop

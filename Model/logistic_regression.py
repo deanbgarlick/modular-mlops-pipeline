@@ -2,7 +2,7 @@
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression as SklearnLogisticRegression
-from typing import Any
+from typing import Any, Optional
 
 from .base import Model
 
@@ -17,12 +17,22 @@ class LogisticRegression(Model):
         self.model = None
         self.is_fitted = False
     
-    def fit(self, X_train: Any, y_train: Any) -> None:
-        """Train the logistic regression model."""
+    def fit(self, X_train: Any, y_train: Any, class_weights: Optional[dict] = None) -> None:
+        """Train the logistic regression model with optional class weights."""
         print("Training logistic regression model...")
+        
+        # Set up class weights
+        if class_weights:
+            print(f"Using class weights: {class_weights}")
+            # Convert to sklearn format
+            class_weight = class_weights
+        else:
+            class_weight = None
+            
         self.model = SklearnLogisticRegression(
             random_state=self.random_state,
             max_iter=self.max_iter,
+            class_weight=class_weight,
             **self.kwargs
         )
         self.model.fit(X_train, y_train)

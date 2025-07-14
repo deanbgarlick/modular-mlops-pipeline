@@ -3,7 +3,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 
 
 class ModelType(Enum):
@@ -16,13 +16,14 @@ class Model(ABC):
     """Abstract base class for models."""
     
     @abstractmethod
-    def fit(self, X_train: Any, y_train: Any) -> None:
+    def fit(self, X_train: Any, y_train: Any, class_weights: Optional[dict] = None) -> None:
         """
         Train the model on training data.
         
         Args:
             X_train: Training features
             y_train: Training labels
+            class_weights: Optional dictionary of class weights for handling imbalance
         """
         pass
     
