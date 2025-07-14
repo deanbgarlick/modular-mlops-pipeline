@@ -76,10 +76,57 @@ else
     echo "main.py failed with exit code $EXIT_CODE at $(date)"
 fi
 
+# Save logs to bucket before shutdown
+echo "Saving logs and results..."
+
+# Get VM name and create log directory
+VM_NAME=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/name" -H "Metadata-Flavor: Google")
+PROJECT_ID=$(curl -s "http://metadata.google.internal/computeMetadata/v1/project/project-id" -H "Metadata-Flavor: Google")
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_BUCKET="${PROJECT_ID}-ml-logs"
+
+# Check if bucket exists
+if ! gsutil ls gs://$LOG_BUCKET/ >/dev/null 2>&1; then
+    echo "Warning: Bucket gs://$LOG_BUCKET does not exist!"
+    echo "Run './setup_logging_bucket.sh' before deploying VMs."
+    echo "Continuing without bucket logging..."
+    LOG_BUCKET=""
+fi
+
+# Upload logs and results if bucket exists
+if [ -n "$LOG_BUCKET" ]; then
+    echo "Uploading startup script logs..."
+    gsutil cp /var/log/startup-script.log gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}_startup.log
+
+    echo "Uploading training results..."
+    if [ -f "training_results.json" ]; then
+        gsutil cp training_results.json gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}_results.json
+    fi
+
+    if [ -f "model.pkl" ] || [ -f "model.pt" ]; then
+        echo "Uploading trained models..."
+        gsutil cp model.* gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/ 2>/dev/null || true
+    fi
+
+    # Upload any other important files
+    if [ -d "outputs" ]; then
+        gsutil -m cp -r outputs gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/ || true
+    fi
+
+    echo "Logs and results saved to: gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/"
+else
+    echo "No logging bucket configured - logs remain on VM only"
+fi
+
 # Auto-shutdown if requested
 if [ "$AUTO_SHUTDOWN" = "true" ]; then
     echo "Auto-shutdown enabled. Shutting down in 60 seconds..."
-    echo "You can SSH in now if you need to check anything: gcloud compute ssh <vm-name> --zone=<zone>"
+    echo "You can SSH in now if you need to check anything: gcloud compute ssh $VM_NAME --zone=us-central1-a"
+    if [ -n "$LOG_BUCKET" ]; then
+        echo "Logs saved to: gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/"
+    else
+        echo "Logs available on VM only (no bucket configured)"
+    fi
     sleep 60
     shutdown -h now
 fi
