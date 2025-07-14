@@ -3,6 +3,7 @@
 from .base import Model, ModelType
 from .logistic_regression import LogisticRegression
 from .pytorch_neural_network import PyTorchNeuralNetwork
+from .knn_classifier import KNNClassifier
 
 
 def create_model(model_type: ModelType, **kwargs) -> Model:
@@ -22,5 +23,7 @@ def create_model(model_type: ModelType, **kwargs) -> Model:
         return LogisticRegression(**kwargs)
     elif model_type == ModelType.PYTORCH_NEURAL_NETWORK:
         return PyTorchNeuralNetwork(**kwargs)
+    elif model_type == ModelType.KNN_CLASSIFIER:
+        return KNNClassifier(**kwargs)
     else:
         raise ValueError(f"Unknown model type: {model_type}") 

@@ -7,6 +7,7 @@ supporting multiple model types through a clean interface.
 from .base import Model, ModelType
 from .logistic_regression import LogisticRegression
 from .pytorch_neural_network import PyTorchNeuralNetwork
+from .knn_classifier import KNNClassifier
 from .factory import create_model
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     'ModelType',
     'LogisticRegression',
     'PyTorchNeuralNetwork',
+    'KNNClassifier',
     'create_model'
 ] 

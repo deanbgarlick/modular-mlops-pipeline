@@ -10,6 +10,7 @@ class ModelType(Enum):
     """Enum for different model types."""
     LOGISTIC_REGRESSION = "logistic_regression"
     PYTORCH_NEURAL_NETWORK = "pytorch_neural_network"
+    KNN_CLASSIFIER = "knn_classifier"
 
 
 class Model(ABC):

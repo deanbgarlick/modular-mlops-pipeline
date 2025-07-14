@@ -198,10 +198,20 @@ def run_with_class_weights():
         extractor_kwargs={"max_features": 10000}
     )
 
+def run_with_knn():
+    """Run pipeline with count vectorizer and KNN classifier."""
+    main(
+        feature_extractor_type=FeatureExtractorType.COUNT_VECTORIZER,
+        model_type=ModelType.KNN_CLASSIFIER,
+        use_class_weights=False,
+        extractor_kwargs={"max_features": 10000},
+        model_kwargs={"n_neighbors": 5, "weights": "uniform"}
+    )
+
 if __name__ == "__main__":
     # Configuration: Choose which feature extractor, model, and options to use
     FEATURE_EXTRACTOR = FeatureExtractorType.COUNT_VECTORIZER  # or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
-    MODEL = ModelType.LOGISTIC_REGRESSION  # or ModelType.PYTORCH_NEURAL_NETWORK
+    MODEL = ModelType.LOGISTIC_REGRESSION  # or ModelType.PYTORCH_NEURAL_NETWORK or ModelType.KNN_CLASSIFIER
     USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
     
     if USE_CLASS_WEIGHTS and FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.LOGISTIC_REGRESSION:
@@ -212,6 +222,8 @@ if __name__ == "__main__":
         run_with_huggingface()
     elif FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.PYTORCH_NEURAL_NETWORK:
         run_with_pytorch_nn()
+    elif FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER and MODEL == ModelType.KNN_CLASSIFIER:
+        run_with_knn()
     else:
         # General configuration approach
         main(
@@ -219,5 +231,9 @@ if __name__ == "__main__":
             model_type=MODEL,
             use_class_weights=USE_CLASS_WEIGHTS,
             extractor_kwargs={"max_features": 10000} if FEATURE_EXTRACTOR == FeatureExtractorType.COUNT_VECTORIZER else {},
-            model_kwargs={"hidden_size": 128, "epochs": 50} if MODEL == ModelType.PYTORCH_NEURAL_NETWORK else {}
+            model_kwargs={
+                "hidden_size": 128, "epochs": 50
+            } if MODEL == ModelType.PYTORCH_NEURAL_NETWORK else {
+                "n_neighbors": 5, "weights": "uniform"
+            } if MODEL == ModelType.KNN_CLASSIFIER else {}
         )
