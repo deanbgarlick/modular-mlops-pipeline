@@ -24,11 +24,13 @@ echo "Retrieving metadata..."
 REPO_URL=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/repo-url" -H "Metadata-Flavor: Google")
 BRANCH=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/branch" -H "Metadata-Flavor: Google" 2>/dev/null || echo "main")
 AUTO_SHUTDOWN=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/auto-shutdown" -H "Metadata-Flavor: Google" 2>/dev/null || echo "true")
+ML_MODE=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/ml-mode" -H "Metadata-Flavor: Google" 2>/dev/null || echo "dispatcher")
 
 echo "Configuration:"
 echo "  Repository: $REPO_URL"
 echo "  Branch: $BRANCH"
 echo "  Auto-shutdown: $AUTO_SHUTDOWN"
+echo "  ML Mode: $ML_MODE"
 
 # Clone the repository
 echo "Cloning repository..."
@@ -67,17 +69,33 @@ echo "System Python: $(python3.10 --version)"
 echo "Virtual env Python: $(python --version)"
 pip list
 
-# Run main.py
-echo "Starting main.py at $(date)"
-python main.py
+# Determine which ML script to run based on mode
+case "$ML_MODE" in
+    "single")
+        SCRIPT_TO_RUN="main_single_run.py"
+        echo "🔄 Running single experiment mode"
+        ;;
+    "suite")
+        SCRIPT_TO_RUN="main_experiment_run.py"
+        echo "🔄 Running experiment suite mode"
+        ;;
+    "dispatcher"|*)
+        SCRIPT_TO_RUN="main.py"
+        echo "🔄 Running dispatcher mode (main.py)"
+        ;;
+esac
+
+# Run the selected script
+echo "Starting $SCRIPT_TO_RUN at $(date)"
+python $SCRIPT_TO_RUN
 
 # Capture exit code
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
-    echo "main.py completed successfully at $(date)"
+    echo "$SCRIPT_TO_RUN completed successfully at $(date)"
 else
-    echo "main.py failed with exit code $EXIT_CODE at $(date)"
+    echo "$SCRIPT_TO_RUN failed with exit code $EXIT_CODE at $(date)"
 fi
 
 # Save logs to bucket before shutdown

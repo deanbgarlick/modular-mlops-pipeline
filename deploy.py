@@ -22,6 +22,8 @@ class VMConfig:
     preemptible: bool = True
     auto_shutdown: bool = True
     service_account: str = os.getenv("ML_SERVICE_ACCOUNT", "")
+    # New field for ML pipeline mode
+    ml_mode: str = "single"  # "single", "suite", or "dispatcher"
 
 class MLTrainingDeployer:
     def __init__(self, config: VMConfig):
@@ -31,7 +33,7 @@ class MLTrainingDeployer:
     def deploy_vm(self, vm_name: Optional[str] = None) -> str:
         """Deploy VM and return instance name"""
         if not vm_name:
-            vm_name = f"ml-training-{int(time.time())}"
+            vm_name = f"ml-training-{self.config.ml_mode}-{int(time.time())}"
             
         # Read startup script
         with open('startup-script-local.sh', 'r') as f:
@@ -59,7 +61,8 @@ class MLTrainingDeployer:
                     {"key": "startup-script", "value": startup_script},
                     {"key": "repo-url", "value": self.config.repo_url},
                     {"key": "branch", "value": self.config.branch},
-                    {"key": "auto-shutdown", "value": str(self.config.auto_shutdown).lower()}
+                    {"key": "auto-shutdown", "value": str(self.config.auto_shutdown).lower()},
+                    {"key": "ml-mode", "value": self.config.ml_mode}
                 ]
             },
             "service_accounts": [{
@@ -78,6 +81,16 @@ class MLTrainingDeployer:
         )
         
         print(f"✓ VM {vm_name} deployed successfully!")
+        print(f"🎯 ML Mode: {self.config.ml_mode}")
+        
+        # Show mode-specific info
+        if self.config.ml_mode == "single":
+            print(f"📄 Running: python main_single_run.py")
+        elif self.config.ml_mode == "suite":
+            print(f"📊 Running: python main_experiment_run.py")
+        else:
+            print(f"🚀 Running: python main.py (dispatcher mode)")
+        
         print(f"📊 Logs will be saved to: gs://{self.config.project_id}-ml-logs/{vm_name}_<timestamp>/")
         print(f"🔄 Stream logs: python deploy.py --action stream --name {vm_name}")
         print(f"📋 Monitor VM: python deploy.py --action monitor --name {vm_name}")
@@ -135,6 +148,9 @@ def main():
     parser.add_argument('--service-account', default=None, help='Service account email (default: uses environment ML_SERVICE_ACCOUNT or VM default)')
     parser.add_argument('--no-preemptible', action='store_true', help='Disable preemptible instances (default: False)')
     parser.add_argument('--no-auto-shutdown', action='store_true', help='Disable auto-shutdown (default: False)')
+    # New argument for ML pipeline mode
+    parser.add_argument('--ml-mode', choices=['single', 'suite', 'dispatcher'], default='single', 
+                       help='ML pipeline mode: single experiment, experiment suite, or dispatcher (default: single)')
     
     args = parser.parse_args()
     
@@ -142,14 +158,21 @@ def main():
         machine_type=args.machine_type,
         preemptible=not args.no_preemptible,
         auto_shutdown=not args.no_auto_shutdown,
-        service_account=getattr(args, 'service_account', None) or os.getenv("ML_SERVICE_ACCOUNT", "")
+        service_account=getattr(args, 'service_account', None) or os.getenv("ML_SERVICE_ACCOUNT", ""),
+        ml_mode=args.ml_mode
     )
     
     deployer = MLTrainingDeployer(config)
     
     if args.action == 'deploy':
         vm_name = deployer.deploy_vm(args.name)
-        print(f"Monitor with: python deploy.py monitor --name {vm_name}")
+        print(f"Monitor with: python deploy.py --action monitor --name {vm_name}")
+        
+        # Show mode-specific usage examples
+        print(f"\n🚀 Deployment Examples:")
+        print(f"  Single experiment:    python deploy.py --ml-mode single")
+        print(f"  Experiment suite:     python deploy.py --ml-mode suite") 
+        print(f"  Dispatcher (default): python deploy.py --ml-mode dispatcher")
         
     elif args.action == 'logs':
         if not args.name:
