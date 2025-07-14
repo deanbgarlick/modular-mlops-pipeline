@@ -1,0 +1,56 @@
+"""Logistic regression model implementation using sklearn."""
+
+import numpy as np
+from sklearn.linear_model import LogisticRegression as SklearnLogisticRegression
+from typing import Any
+
+from .base import Model
+
+
+class LogisticRegression(Model):
+    """Logistic regression model using sklearn."""
+    
+    def __init__(self, random_state: int = 42, max_iter: int = 1000, **kwargs):
+        self.random_state = random_state
+        self.max_iter = max_iter
+        self.kwargs = kwargs
+        self.model = None
+        self.is_fitted = False
+    
+    def fit(self, X_train: Any, y_train: Any) -> None:
+        """Train the logistic regression model."""
+        print("Training logistic regression model...")
+        self.model = SklearnLogisticRegression(
+            random_state=self.random_state,
+            max_iter=self.max_iter,
+            **self.kwargs
+        )
+        self.model.fit(X_train, y_train)
+        self.is_fitted = True
+        print("Model training completed!")
+    
+    def predict(self, X: Any) -> np.ndarray:
+        """Make predictions using the trained model."""
+        if not self.is_fitted:
+            raise ValueError("Model not fitted yet. Call fit() first.")
+        return self.model.predict(X)
+    
+    def predict_proba(self, X: Any) -> np.ndarray:
+        """Make probability predictions using the trained model."""
+        if not self.is_fitted:
+            raise ValueError("Model not fitted yet. Call fit() first.")
+        return self.model.predict_proba(X)
+    
+    def get_model_info(self) -> dict:
+        """Return information about the logistic regression model."""
+        if not self.is_fitted:
+            return {"error": "Model not fitted yet"}
+        
+        return {
+            "model_type": "logistic_regression",
+            "max_iter": self.max_iter,
+            "random_state": self.random_state,
+            "n_features": self.model.n_features_in_,
+            "n_classes": len(self.model.classes_),
+            "classes": self.model.classes_.tolist()
+        } 
