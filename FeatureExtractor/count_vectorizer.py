@@ -51,4 +51,46 @@ class CountVectorizerExtractor(FeatureExtractor):
             "vocab_size": len(self.vectorizer.vocabulary_),
             "max_features": self.max_features,
             "feature_shape": f"(n_samples, {len(self.vectorizer.vocabulary_)})"
-        } 
+        }
+    
+    def save(self, path: str) -> None:
+        """
+        Save the count vectorizer extractor.
+        
+        Args:
+            path: Path where to save the extractor
+        """
+        if not self.is_fitted or self.vectorizer is None:
+            raise ValueError("CountVectorizer extractor must be fitted before saving")
+        
+        extractor_data = {
+            'vectorizer': self.vectorizer,
+            'max_features': self.max_features,
+            'is_fitted': self.is_fitted,
+            'feature_info': self.get_feature_info(),
+            'extractor_type': self.__class__.__name__
+        }
+        
+        self.persistence.save(extractor_data, path)
+    
+    def load(self, path: str) -> None:
+        """
+        Load the count vectorizer extractor.
+        
+        Args:
+            path: Path to load the extractor from
+        """
+        extractor_data = self.persistence.load(path)
+        
+        if isinstance(extractor_data, dict):
+            # New format with structured data
+            self.vectorizer = extractor_data.get('vectorizer')
+            self.max_features = extractor_data.get('max_features', 10000)
+            self.is_fitted = extractor_data.get('is_fitted', True)
+        else:
+            # Backward compatibility - assume it's a direct vectorizer object
+            self.vectorizer = extractor_data
+            self.is_fitted = True
+        
+        if self.vectorizer is None:
+            raise ValueError("Failed to load vectorizer from saved data") 

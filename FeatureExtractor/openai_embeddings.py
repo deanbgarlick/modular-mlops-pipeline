@@ -7,12 +7,14 @@ import os
 import time
 
 from .base import FeatureExtractor
+from .persistence import FeatureExtractorPersistence
 
 
 class OpenAIEmbeddingsExtractor(FeatureExtractor):
     """Feature extractor using OpenAI's text-embedding models."""
     
-    def __init__(self, model_name: str = "text-embedding-3-small", api_key: Optional[str] = None, batch_size: int = 100):
+    def __init__(self, model_name: str = "text-embedding-3-small", api_key: Optional[str] = None, 
+                 batch_size: int = 100, persistence: Optional[FeatureExtractorPersistence] = None):
         """
         Initialize OpenAI embeddings extractor.
         
@@ -20,12 +22,15 @@ class OpenAIEmbeddingsExtractor(FeatureExtractor):
             model_name: OpenAI embedding model name (default: text-embedding-3-small)
             api_key: OpenAI API key. If None, will look for OPENAI_API_KEY environment variable
             batch_size: Number of texts to process in each batch to avoid rate limits
+            persistence: Feature extractor persistence handler
         """
+        super().__init__(persistence=persistence)
         self.model_name = model_name
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.batch_size = batch_size
         self.client = None
         self.embedding_dim = None
+        self.is_fitted = False
         
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
@@ -112,6 +117,7 @@ class OpenAIEmbeddingsExtractor(FeatureExtractor):
         
         print(f"Embeddings created with dimension: {self.embedding_dim}")
         
+        self.is_fitted = True
         return X_train_transformed, X_test_transformed
     
     def transform(self, X: list) -> Any:
@@ -135,4 +141,54 @@ class OpenAIEmbeddingsExtractor(FeatureExtractor):
             "embedding_dim": self.embedding_dim,
             "feature_shape": f"(n_samples, {self.embedding_dim})",
             "batch_size": self.batch_size
-        } 
+        }
+    
+    def save(self, path: str) -> None:
+        """
+        Save the OpenAI embeddings extractor configuration.
+        
+        Args:
+            path: Path where to save the extractor
+        """
+        if not self.is_fitted:
+            raise ValueError("OpenAI embeddings extractor must be fitted before saving")
+        
+        # Note: We don't save the API key for security reasons
+        extractor_data = {
+            'model_name': self.model_name,
+            'batch_size': self.batch_size,
+            'embedding_dim': self.embedding_dim,
+            'is_fitted': self.is_fitted,
+            'feature_info': self.get_feature_info(),
+            'extractor_type': self.__class__.__name__
+        }
+        
+        self.persistence.save(extractor_data, path)
+    
+    def load(self, path: str) -> None:
+        """
+        Load the OpenAI embeddings extractor configuration.
+        
+        Args:
+            path: Path to load the extractor from
+        """
+        extractor_data = self.persistence.load(path)
+        
+        if isinstance(extractor_data, dict):
+            # New format with structured data
+            self.model_name = extractor_data.get('model_name', "text-embedding-3-small")
+            self.batch_size = extractor_data.get('batch_size', 100)
+            self.embedding_dim = extractor_data.get('embedding_dim')
+            self.is_fitted = extractor_data.get('is_fitted', True)
+        else:
+            # Backward compatibility - assume it's configuration data
+            self.is_fitted = True
+        
+        # Re-initialize API key from environment (for security, we don't persist it)
+        if not self.api_key:
+            self.api_key = os.getenv("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable.")
+        
+        # Reset client to be re-initialized on next use
+        self.client = None 

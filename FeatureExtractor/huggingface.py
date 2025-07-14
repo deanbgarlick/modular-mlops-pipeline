@@ -60,4 +60,51 @@ class HuggingFaceExtractor(FeatureExtractor):
             "model_name": self.model_name,
             "embedding_dim": self.embedding_dim,
             "feature_shape": f"(n_samples, {self.embedding_dim})"
-        } 
+        }
+    
+    def save(self, path: str) -> None:
+        """
+        Save the HuggingFace transformer extractor.
+        
+        Args:
+            path: Path where to save the extractor
+        """
+        if not self.is_fitted or self.model is None:
+            raise ValueError("HuggingFace extractor must be fitted before saving")
+        
+        extractor_data = {
+            'model': self.model,
+            'model_name': self.model_name,
+            'embedding_dim': self.embedding_dim,
+            'is_fitted': self.is_fitted,
+            'feature_info': self.get_feature_info(),
+            'extractor_type': self.__class__.__name__
+        }
+        
+        self.persistence.save(extractor_data, path)
+    
+    def load(self, path: str) -> None:
+        """
+        Load the HuggingFace transformer extractor.
+        
+        Args:
+            path: Path to load the extractor from
+        """
+        extractor_data = self.persistence.load(path)
+        
+        if isinstance(extractor_data, dict):
+            # New format with structured data
+            self.model = extractor_data.get('model')
+            self.model_name = extractor_data.get('model_name', "sentence-transformers/all-MiniLM-L6-v2")
+            self.embedding_dim = extractor_data.get('embedding_dim')
+            self.is_fitted = extractor_data.get('is_fitted', True)
+        else:
+            # Backward compatibility - assume it's a direct model object
+            self.model = extractor_data
+            self.is_fitted = True
+            # Try to get embedding dimension from model if available
+            if hasattr(self.model, 'get_sentence_embedding_dimension'):
+                self.embedding_dim = self.model.get_sentence_embedding_dimension()
+        
+        if self.model is None:
+            raise ValueError("Failed to load model from saved data") 

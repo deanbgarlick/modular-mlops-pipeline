@@ -77,4 +77,56 @@ class TfidfVectorizerExtractor(FeatureExtractor):
             "smooth_idf": self.smooth_idf,
             "sublinear_tf": self.sublinear_tf,
             "feature_shape": f"(n_samples, {len(self.vectorizer.vocabulary_)})"
-        } 
+        }
+    
+    def save(self, path: str) -> None:
+        """
+        Save the TF-IDF vectorizer extractor.
+        
+        Args:
+            path: Path where to save the extractor
+        """
+        if not self.is_fitted or self.vectorizer is None:
+            raise ValueError("TfidfVectorizer extractor must be fitted before saving")
+        
+        extractor_data = {
+            'vectorizer': self.vectorizer,
+            'max_features': self.max_features,
+            'min_df': self.min_df,
+            'max_df': self.max_df,
+            'use_idf': self.use_idf,
+            'smooth_idf': self.smooth_idf,
+            'sublinear_tf': self.sublinear_tf,
+            'is_fitted': self.is_fitted,
+            'feature_info': self.get_feature_info(),
+            'extractor_type': self.__class__.__name__
+        }
+        
+        self.persistence.save(extractor_data, path)
+    
+    def load(self, path: str) -> None:
+        """
+        Load the TF-IDF vectorizer extractor.
+        
+        Args:
+            path: Path to load the extractor from
+        """
+        extractor_data = self.persistence.load(path)
+        
+        if isinstance(extractor_data, dict):
+            # New format with structured data
+            self.vectorizer = extractor_data.get('vectorizer')
+            self.max_features = extractor_data.get('max_features', 10000)
+            self.min_df = extractor_data.get('min_df', 1)
+            self.max_df = extractor_data.get('max_df', 1.0)
+            self.use_idf = extractor_data.get('use_idf', True)
+            self.smooth_idf = extractor_data.get('smooth_idf', True)
+            self.sublinear_tf = extractor_data.get('sublinear_tf', False)
+            self.is_fitted = extractor_data.get('is_fitted', True)
+        else:
+            # Backward compatibility - assume it's a direct vectorizer object
+            self.vectorizer = extractor_data
+            self.is_fitted = True
+        
+        if self.vectorizer is None:
+            raise ValueError("Failed to load vectorizer from saved data") 
