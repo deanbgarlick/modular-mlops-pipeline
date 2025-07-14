@@ -5,13 +5,16 @@ from typing import Any, Optional
 import warnings
 
 from .base import SupervisedModel
+from .persistence import ModelPersistence
 
 
 class SimplePyTorchNeuralNetwork(SupervisedModel):
     """Simple PyTorch neural network model for binary classification (original version)."""
     
     def __init__(self, hidden_size: int = 128, learning_rate: float = 0.001, 
-                 epochs: int = 100, batch_size: int = 32, random_state: int = 42):
+                 epochs: int = 100, batch_size: int = 32, random_state: int = 42,
+                 persistence: Optional[ModelPersistence] = None):
+        super().__init__(persistence=persistence)
         self.hidden_size = hidden_size
         self.learning_rate = learning_rate
         self.epochs = epochs

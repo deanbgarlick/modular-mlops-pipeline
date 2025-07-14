@@ -5,12 +5,15 @@ from sklearn.linear_model import LogisticRegression as SklearnLogisticRegression
 from typing import Any, Optional
 
 from .base import SupervisedModel
+from .persistence import ModelPersistence
 
 
 class LogisticRegression(SupervisedModel):
     """Logistic regression model using sklearn."""
     
-    def __init__(self, random_state: int = 42, max_iter: int = 1000, **kwargs):
+    def __init__(self, random_state: int = 42, max_iter: int = 1000, 
+                 persistence: Optional[ModelPersistence] = None, **kwargs):
+        super().__init__(persistence=persistence)
         self.random_state = random_state
         self.max_iter = max_iter
         self.kwargs = kwargs

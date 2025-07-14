@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from .base import SupervisedModel
+from .persistence import ModelPersistence
 
 
 class PyTorchNeuralNetwork(SupervisedModel):
@@ -15,7 +16,9 @@ class PyTorchNeuralNetwork(SupervisedModel):
     def __init__(self, hidden_size: int = 128, learning_rate: float = 0.001, 
                  epochs: int = 100, batch_size: int = 32, random_state: int = 42,
                  dropout_rate: float = 0.3, weight_decay: float = 1e-4,
-                 patience: int = 10, validation_split: float = 0.2):
+                 patience: int = 10, validation_split: float = 0.2,
+                 persistence: Optional[ModelPersistence] = None):
+        super().__init__(persistence=persistence)
         self.hidden_size = hidden_size
         self.learning_rate = learning_rate
         self.epochs = epochs

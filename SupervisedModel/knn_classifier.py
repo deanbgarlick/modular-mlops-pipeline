@@ -3,41 +3,38 @@
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils.class_weight import compute_sample_weight
-from typing import Optional
+from typing import Any, Optional
 
 from .base import SupervisedModel
+from .persistence import ModelPersistence
 
 
 class KNNClassifier(SupervisedModel):
     """K-Nearest Neighbors classifier implementation."""
     
     def __init__(self, n_neighbors: int = 5, weights: str = 'uniform', 
-                 algorithm: str = 'auto', metric: str = 'minkowski', p: int = 2):
+                 algorithm: str = 'auto', metric: str = 'minkowski', p: int = 2,
+                 persistence: Optional[ModelPersistence] = None):
         """
         Initialize KNN classifier.
         
         Args:
             n_neighbors: Number of neighbors to use
             weights: Weight function used in prediction ('uniform', 'distance')
-            algorithm: Algorithm used to compute nearest neighbors ('auto', 'ball_tree', 'kd_tree', 'brute')
+            algorithm: Algorithm used to compute the nearest neighbors ('auto', 'ball_tree', 'kd_tree', 'brute')
             metric: Distance metric to use ('minkowski', 'euclidean', 'manhattan', etc.)
-            p: Power parameter for the Minkowski metric (1=manhattan, 2=euclidean)
+            p: Parameter for the Minkowski metric
+            persistence: Model persistence handler. If None, uses default GCP bucket persistence.
         """
+        super().__init__(persistence=persistence)
         self.n_neighbors = n_neighbors
         self.weights = weights
         self.algorithm = algorithm
         self.metric = metric
         self.p = p
-        
-        self.model = KNeighborsClassifier(
-            n_neighbors=n_neighbors,
-            weights=weights,
-            algorithm=algorithm,
-            metric=metric,
-            p=p
-        )
+        self.model = None
         self.is_fitted = False
-    
+        
     def fit(self, X_train, y_train, class_weights: Optional[dict] = None) -> None:
         """
         Train the KNN classifier.
