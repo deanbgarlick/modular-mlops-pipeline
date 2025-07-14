@@ -4,10 +4,10 @@ import numpy as np
 from typing import Any, Optional
 import warnings
 
-from .base import Model
+from .base import SupervisedModel
 
 
-class SimplePyTorchNeuralNetwork(Model):
+class SimplePyTorchNeuralNetwork(SupervisedModel):
     """Simple PyTorch neural network model for binary classification (original version)."""
     
     def __init__(self, hidden_size: int = 128, learning_rate: float = 0.001, 

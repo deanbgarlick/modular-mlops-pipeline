@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from DataLoader import DataSourceType
 from FeatureExtractor import FeatureExtractorType  
-from Model import ModelType
+from SupervisedModel import SupervisedModelType
 from Pipeline import run_pipeline
 from Experiments import run_experiments
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
             {
                 "data_source_type": DataSourceType.CSV_FILE,
                 "feature_extractor_type": FeatureExtractorType.COUNT_VECTORIZER,
-                "model_type": ModelType.LOGISTIC_REGRESSION,
+                "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
                 "use_class_weights": True,
                 "loader_kwargs": {"file_path": "dataset.csv", "text_column": "customer_review", "target_column": "return", "sep": "\t"},
                 "extractor_kwargs": {"max_features": 10000},
@@ -32,7 +32,7 @@ if __name__ == "__main__":
             {
                 "data_source_type": DataSourceType.CSV_FILE,
                 "feature_extractor_type": FeatureExtractorType.TFIDF_VECTORIZER,
-                "model_type": ModelType.LOGISTIC_REGRESSION,
+                "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
                 "use_class_weights": True,
                 "loader_kwargs": {"file_path": "dataset.csv", "text_column": "customer_review", "target_column": "return", "sep": "\t"},
                 "extractor_kwargs": {"max_features": 10000, "min_df": 2, "max_df": 0.8},
@@ -42,7 +42,7 @@ if __name__ == "__main__":
             {
                 "data_source_type": DataSourceType.CSV_FILE,
                 "feature_extractor_type": FeatureExtractorType.HUGGINGFACE_TRANSFORMER,
-                "model_type": ModelType.LOGISTIC_REGRESSION,
+                "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
                 "use_class_weights": True,
                 "loader_kwargs": {"file_path": "dataset.csv", "text_column": "customer_review", "target_column": "return", "sep": "\t"},
                 "extractor_kwargs": {"model_name": "sentence-transformers/all-MiniLM-L6-v2"},
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         # Single run configuration
         DATA_SOURCE = DataSourceType.CSV_FILE  # or DataSourceType.NEWSGROUPS
         FEATURE_EXTRACTOR = FeatureExtractorType.TFIDF_VECTORIZER  # or FeatureExtractorType.COUNT_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
-        MODEL = ModelType.LOGISTIC_REGRESSION  # or ModelType.PYTORCH_NEURAL_NETWORK or ModelType.KNN_CLASSIFIER
+        MODEL = SupervisedModelType.LOGISTIC_REGRESSION  # or SupervisedModelType.PYTORCH_NEURAL_NETWORK or SupervisedModelType.KNN_CLASSIFIER
         USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
         
         # Configure data loader arguments based on selection
@@ -89,9 +89,9 @@ if __name__ == "__main__":
         elif FEATURE_EXTRACTOR == FeatureExtractorType.HUGGINGFACE_TRANSFORMER:
             extractor_kwargs = {"model_name": "sentence-transformers/all-MiniLM-L6-v2"}
         
-        if MODEL == ModelType.PYTORCH_NEURAL_NETWORK:
+        if MODEL == SupervisedModelType.PYTORCH_NEURAL_NETWORK:
             model_kwargs = {"hidden_size": 128, "epochs": 50}
-        elif MODEL == ModelType.KNN_CLASSIFIER:
+        elif MODEL == SupervisedModelType.KNN_CLASSIFIER:
             model_kwargs = {"n_neighbors": 5, "weights": "uniform"}
         
         # Run the main pipeline

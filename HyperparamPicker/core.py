@@ -11,7 +11,7 @@ from ax.generation_strategy.dispatch_utils import choose_generation_strategy_leg
 
 from DataLoader import DataSourceType
 from FeatureExtractor import FeatureExtractorType
-from Model import ModelType
+from SupervisedModel import SupervisedModelType
 
 from .config import HyperparamSearchConfig, MultiObjectiveConfig
 from .runner import PipelineRunner
@@ -47,7 +47,7 @@ class HyperparamPicker:
     def optimize(self,
                  data_source_type: DataSourceType,
                  feature_extractor_type: FeatureExtractorType,
-                 model_type: ModelType,
+                 model_type: SupervisedModelType,
                  loader_kwargs: Dict[str, Any],
                  base_extractor_kwargs: Dict[str, Any],
                  base_model_kwargs: Dict[str, Any],
@@ -149,7 +149,7 @@ class HyperparamPicker:
     
     def _create_search_space(self,
                            feature_extractor_type: FeatureExtractorType,
-                           model_type: ModelType) -> SearchSpace:
+                           model_type: SupervisedModelType) -> SearchSpace:
         """Create Ax search space from configuration."""
         # Get parameters for this specific configuration
         parameters = self.search_config.get_parameters_for_config(

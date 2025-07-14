@@ -6,10 +6,10 @@ import warnings
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-from .base import Model
+from .base import SupervisedModel
 
 
-class PyTorchNeuralNetwork(Model):
+class PyTorchNeuralNetwork(SupervisedModel):
     """PyTorch neural network model for binary classification."""
     
     def __init__(self, hidden_size: int = 128, learning_rate: float = 0.001, 

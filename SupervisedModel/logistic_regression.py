@@ -4,10 +4,10 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression as SklearnLogisticRegression
 from typing import Any, Optional
 
-from .base import Model
+from .base import SupervisedModel
 
 
-class LogisticRegression(Model):
+class LogisticRegression(SupervisedModel):
     """Logistic regression model using sklearn."""
     
     def __init__(self, random_state: int = 42, max_iter: int = 1000, **kwargs):

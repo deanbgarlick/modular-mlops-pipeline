@@ -1,4 +1,4 @@
-"""Base classes and enums for models."""
+"""Base classes and enums for supervised models."""
 
 import numpy as np
 from abc import ABC, abstractmethod
@@ -6,16 +6,16 @@ from enum import Enum
 from typing import Any, Tuple, Optional
 
 
-class ModelType(Enum):
-    """Enum for different model types."""
+class SupervisedModelType(Enum):
+    """Enum for different supervised model types."""
     LOGISTIC_REGRESSION = "logistic_regression"
     PYTORCH_NEURAL_NETWORK = "pytorch_neural_network"
     SIMPLE_PYTORCH_NEURAL_NETWORK = "simple_pytorch_neural_network"
     KNN_CLASSIFIER = "knn_classifier"
 
 
-class Model(ABC):
-    """Abstract base class for models."""
+class SupervisedModel(ABC):
+    """Abstract base class for supervised models."""
     
     @abstractmethod
     def fit(self, X_train: Any, y_train: Any, class_weights: Optional[dict] = None) -> None:

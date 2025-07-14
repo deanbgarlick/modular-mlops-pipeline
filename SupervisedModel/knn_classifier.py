@@ -5,10 +5,10 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils.class_weight import compute_sample_weight
 from typing import Optional
 
-from .base import Model
+from .base import SupervisedModel
 
 
-class KNNClassifier(Model):
+class KNNClassifier(SupervisedModel):
     """K-Nearest Neighbors classifier implementation."""
     
     def __init__(self, n_neighbors: int = 5, weights: str = 'uniform', 

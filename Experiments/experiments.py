@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 
 from DataLoader import DataSourceType, create_data_loader
 from FeatureExtractor import FeatureExtractorType, create_feature_extractor
-from Model import ModelType, create_model
+from SupervisedModel import SupervisedModelType, create_model
 from Pipeline import prepare_data, create_features, train_model, evaluate_model
 
 
@@ -63,7 +63,7 @@ def run_experiments(experiment_configs: List[Dict[str, Any]], output_file: str =
             
             # Create features
             feature_extractor = create_feature_extractor(feature_extractor_type, **extractor_kwargs)
-            X_train_transformed, X_test_transformed, fitted_extractor = create_features(
+            X_train_transformed, X_test_transformed = create_features(
                 X_train, X_test, feature_extractor
             )
             
@@ -72,11 +72,11 @@ def run_experiments(experiment_configs: List[Dict[str, Any]], output_file: str =
             trained_model = train_model(X_train_transformed, y_train, model, use_class_weights)
             
             # Evaluate model
-            y_pred, accuracy = evaluate_model(trained_model, X_test_transformed, y_test, target_names)
+            accuracy, f1_macro, f1_weighted, y_pred, y_pred_proba = evaluate_model(trained_model, X_test_transformed, y_test, target_names)
             
-            # Calculate additional metrics
-            f1_macro = f1_score(y_test, y_pred, average='macro')
-            f1_weighted = f1_score(y_test, y_pred, average='weighted')
+            # Calculate additional metrics (no longer needed as they're returned from evaluate_model)
+            # f1_macro = f1_score(y_test, y_pred, average='macro')
+            # f1_weighted = f1_score(y_test, y_pred, average='weighted')
             
             # End timing
             end_time = time.time()
@@ -96,7 +96,7 @@ def run_experiments(experiment_configs: List[Dict[str, Any]], output_file: str =
                     "model_kwargs": model_kwargs
                 },
                 "data_info": data_loader.get_data_info(),
-                "feature_info": fitted_extractor.get_feature_info(),
+                "feature_info": feature_extractor.get_feature_info(), # Assuming feature_extractor has this method
                 "model_info": trained_model.get_model_info(),
                 "performance": {
                     "accuracy": float(accuracy),

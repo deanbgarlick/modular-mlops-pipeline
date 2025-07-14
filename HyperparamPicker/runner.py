@@ -16,7 +16,7 @@ from ax.core.utils import get_model_times
 
 from DataLoader import DataSourceType
 from FeatureExtractor import FeatureExtractorType
-from Model import ModelType
+from SupervisedModel import SupervisedModelType
 from Pipeline import run_pipeline
 
 
@@ -61,7 +61,7 @@ class PipelineRunner(Runner):
     def __init__(self, 
                  data_source_type: DataSourceType,
                  feature_extractor_type: FeatureExtractorType,
-                 model_type: ModelType,
+                 model_type: SupervisedModelType,
                  loader_kwargs: Dict[str, Any],
                  base_extractor_kwargs: Dict[str, Any],
                  base_model_kwargs: Dict[str, Any],

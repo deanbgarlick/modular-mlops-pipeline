@@ -4,7 +4,7 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from DataLoader import DataSourceType
 from FeatureExtractor import FeatureExtractorType
-from Model import ModelType
+from SupervisedModel import SupervisedModelType
 
 from .config import (
     HyperparamSearchConfig,
@@ -47,7 +47,7 @@ def create_hyperparam_picker(
 def run_hyperparameter_optimization(
     data_source_type: DataSourceType,
     feature_extractor_type: FeatureExtractorType,
-    model_type: ModelType,
+    model_type: SupervisedModelType,
     loader_kwargs: Dict[str, Any],
     base_extractor_kwargs: Optional[Dict[str, Any]] = None,
     base_model_kwargs: Optional[Dict[str, Any]] = None,
@@ -63,7 +63,7 @@ def run_hyperparameter_optimization(
     Args:
         data_source_type: Type of data source
         feature_extractor_type: Type of feature extractor
-        model_type: Type of model
+        model_type: Type of supervised model
         loader_kwargs: Arguments for data loader
         base_extractor_kwargs: Base arguments for feature extractor
         base_model_kwargs: Base arguments for model
@@ -126,7 +126,7 @@ def create_tfidf_logistic_regression_config():
     return {
         "data_source_type": DataSourceType.CSV_FILE,
         "feature_extractor_type": FeatureExtractorType.TFIDF_VECTORIZER,
-        "model_type": ModelType.LOGISTIC_REGRESSION,
+        "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
         "loader_kwargs": {
             "file_path": "dataset.csv",
             "text_column": "customer_review",
@@ -143,7 +143,7 @@ def create_openai_embeddings_config():
     return {
         "data_source_type": DataSourceType.CSV_FILE,
         "feature_extractor_type": FeatureExtractorType.OPENAI_EMBEDDINGS,
-        "model_type": ModelType.LOGISTIC_REGRESSION,
+        "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
         "loader_kwargs": {
             "file_path": "dataset.csv",
             "text_column": "customer_review",

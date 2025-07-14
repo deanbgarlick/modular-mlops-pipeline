@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from typing import Optional, Dict, Any
 
 from FeatureExtractor import FeatureExtractor, FeatureExtractorType, create_feature_extractor
-from Model import Model, ModelType, create_model
+from SupervisedModel import SupervisedModel, SupervisedModelType, create_model
 from DataLoader import DataSourceType, create_data_loader
 
 
@@ -30,31 +30,34 @@ def prepare_data(df, test_size=0.2, random_state=42):
 def create_features(X_train, X_test, feature_extractor: FeatureExtractor):
     """Create features using the specified feature extractor."""
     print(f"\nExtracting features...")
-    X_train_transformed, X_test_transformed = feature_extractor.fit_transform(X_train, X_test)
     
-    # Print feature information
+    # Fit on train data and transform both train and test
+    X_train_features, X_test_features = feature_extractor.fit_transform(X_train, X_test)
+    
+    # Print feature extractor info
     feature_info = feature_extractor.get_feature_info()
-    print(f"Feature matrix shape: {X_train_transformed.shape}")
     for key, value in feature_info.items():
         print(f"{key}: {value}")
     
-    return X_train_transformed, X_test_transformed, feature_extractor
+    return X_train_features, X_test_features
 
 
-def train_model(X_train, y_train, model: Model, use_class_weights: bool = False):
-    """Train the specified model with optional class weighting."""
+def train_model(X_train, y_train, model: SupervisedModel, use_class_weights: bool = False):
+    """Train the model."""
     print(f"\nTraining model...")
     
+    # Calculate class weights if requested
     class_weights = None
     if use_class_weights:
-        # Calculate class weights
         from sklearn.utils.class_weight import compute_class_weight
         classes = np.unique(y_train)
         weights = compute_class_weight('balanced', classes=classes, y=y_train)
         class_weights = dict(zip(classes, weights))
         print(f"Calculated class weights: {class_weights}")
     
+    # Train the model
     model.fit(X_train, y_train, class_weights=class_weights)
+    print("Model training completed!")
     
     # Print model info
     model_info = model.get_model_info()
@@ -66,10 +69,14 @@ def train_model(X_train, y_train, model: Model, use_class_weights: bool = False)
 
 
 def evaluate_model(model, X_test, y_test, target_names):
-    """Evaluate model performance on test set."""
+    """Evaluate the trained model."""
     print(f"\nEvaluating model on test set...")
-    y_pred = model.predict(X_test)
     
+    # Make predictions
+    y_pred = model.predict(X_test)
+    y_pred_proba = model.predict_proba(X_test)
+    
+    # Calculate metrics
     accuracy = accuracy_score(y_test, y_pred)
     f1_macro = f1_score(y_test, y_pred, average='macro')
     f1_weighted = f1_score(y_test, y_pred, average='weighted')
@@ -78,18 +85,19 @@ def evaluate_model(model, X_test, y_test, target_names):
     print(f"F1-Score (Macro): {f1_macro:.4f}")
     print(f"F1-Score (Weighted): {f1_weighted:.4f}")
     
+    # Print detailed results
     print(f"\nClassification Report:")
     print(classification_report(y_test, y_pred, target_names=target_names))
     
     print(f"\nConfusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
     
-    return y_pred, accuracy
+    return accuracy, f1_macro, f1_weighted, y_pred, y_pred_proba
 
 
 def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
                  feature_extractor_type: FeatureExtractorType = FeatureExtractorType.COUNT_VECTORIZER,
-                 model_type: ModelType = ModelType.LOGISTIC_REGRESSION,
+                 model_type: SupervisedModelType = SupervisedModelType.LOGISTIC_REGRESSION,
                  use_class_weights: bool = False,
                  loader_kwargs: Optional[Dict[str, Any]] = None,
                  extractor_kwargs: Optional[Dict[str, Any]] = None, 
@@ -126,7 +134,7 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     )
     
     # Create features using the chosen extractor
-    X_train_transformed, X_test_transformed, fitted_extractor = create_features(
+    X_train_transformed, X_test_transformed = create_features(
         X_train, X_test, feature_extractor
     )
     
@@ -137,7 +145,7 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     trained_model = train_model(X_train_transformed, y_train, model, use_class_weights)
     
     # Evaluate model
-    y_pred, accuracy = evaluate_model(trained_model, X_test_transformed, y_test, target_names)
+    accuracy, f1_macro, f1_weighted, y_pred, y_pred_proba = evaluate_model(trained_model, X_test_transformed, y_test, target_names)
     
     # Example prediction on new text
     print(f"\nExample prediction:")
@@ -145,7 +153,7 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     
     # Transform sample text using the fitted feature extractor
     try:
-        sample_transformed = fitted_extractor.transform(sample_text)
+        sample_transformed = feature_extractor.transform(sample_text)
         prediction = trained_model.predict(sample_transformed)[0]
         probability = trained_model.predict_proba(sample_transformed)[0]
         
@@ -157,10 +165,10 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     
     return {
         "accuracy": accuracy,
-        "f1_macro": f1_score(y_test, y_pred, average='macro'),
-        "f1_weighted": f1_score(y_test, y_pred, average='weighted'),
+        "f1_macro": f1_macro,
+        "f1_weighted": f1_weighted,
         "predictions": y_pred,
         "target_names": target_names,
-        "fitted_extractor": fitted_extractor,
+        "fitted_extractor": feature_extractor,
         "trained_model": trained_model
     } 

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from DataLoader import DataSourceType
 from FeatureExtractor import FeatureExtractorType
-from Model import ModelType
+from SupervisedModel import SupervisedModelType
 from HyperparamPicker import (
     create_hyperparam_picker,
     HyperparamSearchConfig,
@@ -78,7 +78,7 @@ def test_custom_hyperparameter_space():
     }
     
     # Custom model parameters
-    search_config.model_params[ModelType.LOGISTIC_REGRESSION] = {
+    search_config.model_params[SupervisedModelType.LOGISTIC_REGRESSION] = {
         "C": ParameterSpec(
             name="C",
             param_type="range",
@@ -117,7 +117,7 @@ def test_custom_hyperparameter_space():
     results = picker.optimize(
         data_source_type=DataSourceType.CSV_FILE,
         feature_extractor_type=FeatureExtractorType.TFIDF_VECTORIZER,
-        model_type=ModelType.LOGISTIC_REGRESSION,
+        model_type=SupervisedModelType.LOGISTIC_REGRESSION,
         loader_kwargs={
             "file_path": "dataset.csv",
             "text_column": "customer_review",

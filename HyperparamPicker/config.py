@@ -18,7 +18,7 @@ from ax.core import (
 from ax.metrics.tensorboard import TensorboardMetric
 
 from FeatureExtractor import FeatureExtractorType
-from Model import ModelType
+from SupervisedModel import SupervisedModelType
 
 
 class OptimizationObjective(Enum):
@@ -92,14 +92,14 @@ class HyperparamSearchConfig:
     feature_extractor_params: Dict[FeatureExtractorType, Dict[str, ParameterSpec]] = field(default_factory=dict)
     
     # Model hyperparameters
-    model_params: Dict[ModelType, Dict[str, ParameterSpec]] = field(default_factory=dict)
+    model_params: Dict[SupervisedModelType, Dict[str, ParameterSpec]] = field(default_factory=dict)
     
     # Training hyperparameters (common across all models)
     training_params: Dict[str, ParameterSpec] = field(default_factory=dict)
     
     def get_parameters_for_config(self, 
                                  feature_extractor_type: FeatureExtractorType,
-                                 model_type: ModelType) -> List[ParameterSpec]:
+                                 model_type: SupervisedModelType) -> List[ParameterSpec]:
         """Get all parameters for a specific feature extractor and model combination."""
         parameters = []
         
@@ -246,7 +246,7 @@ def create_default_search_config() -> HyperparamSearchConfig:
     }
     
     # Logistic Regression parameters
-    config.model_params[ModelType.LOGISTIC_REGRESSION] = {
+    config.model_params[SupervisedModelType.LOGISTIC_REGRESSION] = {
         "C": ParameterSpec(
             name="C",
             param_type="range",
@@ -265,7 +265,7 @@ def create_default_search_config() -> HyperparamSearchConfig:
     }
     
     # KNN Classifier parameters
-    config.model_params[ModelType.KNN_CLASSIFIER] = {
+    config.model_params[SupervisedModelType.KNN_CLASSIFIER] = {
         "n_neighbors": ParameterSpec(
             name="n_neighbors",
             param_type="range",
