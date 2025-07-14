@@ -2,24 +2,20 @@
 
 import pandas as pd
 import numpy as np
-import os
 import time
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from typing import Optional, Dict, Any
 
 from FeatureExtractor import (
-    FeatureExtractor, FeatureExtractorType, create_feature_extractor,
-    PickleGCPExtractorPersistence, PickleLocalExtractorPersistence
+    FeatureExtractor, FeatureExtractorType, create_feature_extractor
 )
 from SupervisedModel import (
-    SupervisedModel, SupervisedModelType, create_model,
-    PickleGCPBucketPersistence, TorchGCPBucketPersistence, PickleLocalFilePersistence
+    SupervisedModel, SupervisedModelType, create_model
 )
 from DataLoader import DataSourceType, create_data_loader
 from PipelineStep.pipeline_step import PipelineStep
-from PipelineStep.persistence import GCPPipelineStepPersistence, LocalPipelineStepPersistence
-from Pipeline.pipeline import Pipeline, PipelinePersistence
+from Pipeline.pipeline import Pipeline
 
 
 def prepare_data(df, test_size=0.2, random_state=42):
@@ -60,104 +56,28 @@ def evaluate_model(y_true, y_pred, target_names):
     return accuracy, f1_macro, f1_weighted
 
 
-def generate_artifact_name(feature_extractor_type: FeatureExtractorType, 
-                          model_type: SupervisedModelType,
-                          extractor_kwargs: Dict[str, Any],
-                          model_kwargs: Dict[str, Any],
-                          prefix: str = "",
-                          stable_naming: bool = True) -> str:
-    """Generate a name for saved artifacts based on configuration."""
-    # Create a hash-like string from configuration
-    config_str = f"{feature_extractor_type.value}_{model_type.value}"
-    
-    # Add key parameters to the name
-    if extractor_kwargs:
-        for key, value in sorted(extractor_kwargs.items()):
-            if key != 'persistence':  # Skip persistence objects
-                config_str += f"_{key}{value}"
-    
-    if model_kwargs:
-        for key, value in sorted(model_kwargs.items()):
-            if key != 'persistence':  # Skip persistence objects
-                config_str += f"_{key}{value}"
-    
-    # Add timestamp only if not using stable naming
-    if not stable_naming:
-        timestamp = int(time.time())
-        config_str += f"_{timestamp}"
-    
-    return f"{prefix}{config_str}" if prefix else config_str
-
-
-def setup_persistence(use_gcp_persistence: bool = True,
-                     gcp_bucket: Optional[str] = None):
-    """Setup persistence handlers for pipeline components."""
-    
-    # Get bucket name from environment or parameter
-    if gcp_bucket is None:
-        gcp_bucket = os.getenv("GCP_ML_BUCKET", "default-ml-artifacts")
-    
-    if use_gcp_persistence:
-        print(f"Setting up GCP persistence with bucket: {gcp_bucket}")
-        
-        # Feature extractor persistence
-        extractor_persistence = PickleGCPExtractorPersistence(
-            bucket_name=gcp_bucket,
-            prefix="feature_extractors/"
-        )
-        
-        # Model persistence
-        model_persistence = PickleGCPBucketPersistence(bucket_name=gcp_bucket)
-        
-        # Pipeline step persistence
-        pipeline_step_persistence = GCPPipelineStepPersistence(
-            bucket_name=gcp_bucket,
-            prefix="pipeline_steps/"
-        )
-        
-        # Pipeline persistence
-        pipeline_persistence = PipelinePersistence(base_path="pipelines")  # Still local for metadata
-        
-    else:
-        print("Setting up local persistence")
-        
-        # Local persistence
-        extractor_persistence = PickleLocalExtractorPersistence(base_path="saved_extractors")
-        model_persistence = PickleLocalFilePersistence(base_path="saved_models")
-        pipeline_step_persistence = LocalPipelineStepPersistence(base_path="saved_pipeline_steps")
-        pipeline_persistence = PipelinePersistence(base_path="pipelines")
-    
-    return extractor_persistence, model_persistence, pipeline_step_persistence, pipeline_persistence
-
-
 def create_pipeline_components(feature_extractor_type: FeatureExtractorType,
                               model_type: SupervisedModelType,
                               extractor_kwargs: Dict[str, Any],
-                              model_kwargs: Dict[str, Any],
-                              extractor_persistence,
-                              model_persistence,
-                              pipeline_step_persistence) -> Pipeline:
+                              model_kwargs: Dict[str, Any]) -> Pipeline:
     """Create a pipeline with feature extraction and model components."""
     
     # Create feature extractor
     feature_extractor = create_feature_extractor(
-        feature_extractor_type, 
-        persistence=extractor_persistence,
+        feature_extractor_type,
         **extractor_kwargs
     )
     
     # Create model
     model = create_model(
         model_type,
-        persistence=model_persistence,
         **model_kwargs
     )
     
     # Create pipeline step wrapper for feature extractor
     feature_pipeline_step = PipelineStep(
         component=feature_extractor,
-        included_features=["text"],  # Use the 'text' column from our dataframes
-        persistence=pipeline_step_persistence
+        included_features=["text"]  # Use the 'text' column from our dataframes
     )
     
     # Create pipeline step wrapper for model  
@@ -166,8 +86,7 @@ def create_pipeline_components(feature_extractor_type: FeatureExtractorType,
         included_features=["*"],  # Use all feature columns
         excluded_features=["text", "target"],  # Exclude original text and target
         target_column="target",
-        prediction_column="prediction",
-        persistence=pipeline_step_persistence
+        prediction_column="prediction"
     )
     
     # Create pipeline
@@ -182,13 +101,7 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
                  use_class_weights: bool = False,
                  loader_kwargs: Optional[Dict[str, Any]] = None,
                  extractor_kwargs: Optional[Dict[str, Any]] = None, 
-                 model_kwargs: Optional[Dict[str, Any]] = None,
-                 # Persistence options
-                 use_gcp_persistence: bool = True,
-                 gcp_bucket: Optional[str] = None,
-                 save_artifacts: bool = True,
-                 force_retrain: bool = False,
-                 artifact_prefix: str = ""):
+                 model_kwargs: Optional[Dict[str, Any]] = None):
     """Run the complete machine learning pipeline using the Pipeline class.
     
     Args:
@@ -199,11 +112,6 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
         loader_kwargs: Arguments for data loader
         extractor_kwargs: Arguments for feature extractor
         model_kwargs: Arguments for model
-        use_gcp_persistence: Whether to use GCP storage (True) or local storage (False)
-        gcp_bucket: GCP bucket name (uses env var GCP_ML_BUCKET if None)
-        save_artifacts: Whether to save the entire pipeline
-        force_retrain: Whether to force retraining even if saved artifacts exist
-        artifact_prefix: Prefix for artifact names (useful for experiments)
     
     Returns:
         Dict containing results and pipeline information
@@ -218,24 +126,6 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     print(f"Using data source: {data_source_type.value}")
     print(f"Using feature extractor: {feature_extractor_type.value}")
     print(f"Using model: {model_type.value}")
-    print(f"GCP Persistence: {use_gcp_persistence}")
-    print(f"Save artifacts: {save_artifacts}")
-    print(f"Force retrain: {force_retrain}")
-    
-    # Setup persistence
-    extractor_persistence, model_persistence, pipeline_step_persistence, pipeline_persistence = setup_persistence(
-        use_gcp_persistence=use_gcp_persistence,
-        gcp_bucket=gcp_bucket
-    )
-    
-    # Generate artifact name for this configuration
-    artifact_name = generate_artifact_name(
-        feature_extractor_type, model_type, 
-        extractor_kwargs, model_kwargs, 
-        prefix=artifact_prefix,
-        stable_naming=not force_retrain
-    )
-    print(f"Pipeline artifact name: {artifact_name}")
     
     # Load data
     data_loader = create_data_loader(data_source_type, **loader_kwargs)
@@ -251,51 +141,31 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     # Prepare train/test splits
     train_df, test_df = prepare_data(df)
     
-    # Try to load existing pipeline or create new one
-    pipeline_loaded = False
-    if not force_retrain and save_artifacts:
-        try:
-            print(f"\nAttempting to load existing pipeline: {artifact_name}")
-            pipeline = Pipeline.load_from_path(artifact_name, persistence=pipeline_persistence)
-            pipeline_loaded = True
-            print("✓ Successfully loaded existing pipeline")
-        except Exception as e:
-            print(f"Failed to load existing pipeline: {e}")
-            print("Creating new pipeline...")
+    # Create pipeline
+    pipeline = create_pipeline_components(
+        feature_extractor_type, model_type,
+        extractor_kwargs, model_kwargs
+    )
     
-    if not pipeline_loaded:
-        # Create new pipeline
-        pipeline = create_pipeline_components(
-            feature_extractor_type, model_type,
-            extractor_kwargs, model_kwargs,
-            extractor_persistence, model_persistence, pipeline_step_persistence
-        )
+    # Train the pipeline
+    print(f"\nTraining pipeline...")
     
-    # Train/fit the pipeline if needed
-    if not pipeline_loaded or force_retrain:
-        print(f"\nTraining pipeline...")
-        
-        # Add class weights to model if requested
-        if use_class_weights:
-             from sklearn.utils.class_weight import compute_class_weight
-             classes = np.unique(train_df['target'])  # type: ignore[index]
-             weights = compute_class_weight('balanced', classes=classes, y=train_df['target'])  # type: ignore[index]
-             class_weights = dict(zip(classes, weights))
-             print(f"Calculated class weights: {class_weights}")
-             # Note: Pipeline doesn't currently support class weights in fit_transform
-        
-        # Fit and transform training data, transform test data with explicit targets
-        train_transformed, test_transformed = pipeline.fit_transform(
-            train_df, test_df, 
-            y_train=train_df['target'], 
-            y_test=test_df['target']
-        )  # type: ignore[arg-type,index]
-        print("Pipeline training completed!")
-    else:
-        print(f"\nUsing pre-trained pipeline...")
-        # Just transform the data with the loaded pipeline
-        train_transformed = pipeline.transform(train_df)  # type: ignore[arg-type]
-        test_transformed = pipeline.transform(test_df)  # type: ignore[arg-type]
+    # Add class weights to model if requested
+    if use_class_weights:
+         from sklearn.utils.class_weight import compute_class_weight
+         classes = np.unique(train_df['target'].values)  # type: ignore[index]
+         weights = compute_class_weight('balanced', classes=classes, y=train_df['target'].values)  # type: ignore[index]
+         class_weights = dict(zip(classes, weights))
+         print(f"Calculated class weights: {class_weights}")
+         # Note: Pipeline doesn't currently support class weights in fit_transform
+    
+    # Fit and transform training data, transform test data with explicit targets
+    train_transformed, test_transformed = pipeline.fit_transform(
+        train_df, test_df, 
+        y_train=train_df['target'].values,  # type: ignore[index]
+        y_test=test_df['target'].values  # type: ignore[index]
+    )
+    print("Pipeline training completed!")
     
     # Make predictions on test set
     # The final transformed data should be predictions from the model
@@ -322,23 +192,6 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
         test_df['target'].values, y_pred, target_names
     )
     
-    # Save pipeline if requested
-    saved_paths = {}
-    if save_artifacts and not pipeline_loaded:
-        try:
-            print(f"\nSaving pipeline...")
-            pipeline.save(artifact_name)
-            
-            saved_paths = {
-                "pipeline_path": artifact_name,
-                "bucket": gcp_bucket if use_gcp_persistence else "local",
-                "artifact_name": artifact_name
-            }
-            print(f"✓ Pipeline saved successfully")
-            
-        except Exception as e:
-            print(f"⚠ Failed to save pipeline: {e}")
-    
     # Example prediction on new text
     print(f"\nExample prediction:")
     sample_df = pd.DataFrame({
@@ -348,7 +201,12 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     
     try:
         sample_prediction = pipeline.transform(sample_df)
-        pred_class = sample_prediction.flatten()[0] if hasattr(sample_prediction, 'flatten') else sample_prediction[0]
+        if hasattr(sample_prediction, 'toarray'):
+            pred_class = sample_prediction.toarray().flatten()[0]  # type: ignore[attr-defined]
+        elif hasattr(sample_prediction, 'flatten'):
+            pred_class = sample_prediction.flatten()[0]  # type: ignore[attr-defined]
+        else:
+            pred_class = sample_prediction[0]
         
         # Handle probability vs class prediction
         if isinstance(pred_class, (float, np.floating)) and 0 <= pred_class <= 1:
@@ -366,7 +224,5 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
         "predictions": y_pred,
         "target_names": target_names,
         "pipeline": pipeline,
-        "saved_paths": saved_paths,
-        "artifact_name": artifact_name,
         "training_time": time.time()
     } 
