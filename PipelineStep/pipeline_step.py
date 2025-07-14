@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import scipy.sparse
-from typing import Tuple, Optional, cast
+from typing import Tuple, Optional, cast, List
 
 from FeatureExtractor.base import FeatureExtractor, FeatureMatrix
 from .persistence import PipelineStepPersistence
@@ -14,22 +14,22 @@ class PipelineStep:
     Pipeline step wrapper for FeatureExtractor that handles DataFrame input.
     
     This class acts as an adapter that allows FeatureExtractors to work seamlessly 
-    in DataFrame-based pipelines by automatically extracting the specified text column
+    in DataFrame-based pipelines by automatically extracting the specified feature columns
     and converting outputs to DataFrames.
     """
     
-    def __init__(self, feature_extractor: FeatureExtractor, text_column_name: str,
+    def __init__(self, feature_extractor: FeatureExtractor, included_features: List[str] = ["*"],
                  persistence: Optional[PipelineStepPersistence] = None):
         """
         Initialize the pipeline step.
         
         Args:
             feature_extractor: The FeatureExtractor instance to wrap
-            text_column_name: Name of the column containing text data in input DataFrames
+            included_features: List of column names to include as features from input DataFrames
             persistence: PipelineStep persistence handler for saving/loading
         """
         self.feature_extractor = feature_extractor
-        self.text_column_name = text_column_name
+        self.included_features = included_features
         self.persistence = persistence
     
     def _convert_to_dataframe(self, features: FeatureMatrix, prefix: str = "feature") -> pd.DataFrame:
@@ -72,33 +72,60 @@ class PipelineStep:
         # Fallback for other types
         raise ValueError(f"Unsupported feature type: {type(features)}")
     
+    def _extract_feature_data(self, df: pd.DataFrame) -> List[str]:
+        """
+        Extract and combine feature data from DataFrame columns.
+        
+        Args:
+            df: DataFrame containing feature columns
+            
+        Returns:
+            List of combined text strings from the specified columns
+        """
+        missing_columns = [col for col in self.included_features if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Columns {missing_columns} not found in DataFrame")
+        
+        # If single column, return as list of strings
+        if len(self.included_features) == 1:
+            if self.included_features[0] == "*":
+                return df.astype(str).tolist()
+            else:
+                return df[self.included_features[0]].astype(str).tolist()
+        
+        # If multiple columns, concatenate them with space separator
+        combined_series = df[self.included_features].astype(str).apply(
+            lambda row: ' '.join(row.values), axis=1
+        )
+        return combined_series.tolist()
+
     def fit_transform(self, X_train: pd.DataFrame, X_test: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Fit on training data and transform both train and test sets.
         
         Args:
-            X_train: Training DataFrame containing text data
-            X_test: Test DataFrame containing text data
+            X_train: Training DataFrame containing feature data
+            X_test: Test DataFrame containing feature data
             
         Returns:
             Tuple of (X_train_with_features, X_test_with_features) as DataFrames containing 
             original columns plus generated feature columns
         """
-        if self.text_column_name not in X_train.columns:
-            raise ValueError(f"Column '{self.text_column_name}' not found in training DataFrame")
-        if self.text_column_name not in X_test.columns:
-            raise ValueError(f"Column '{self.text_column_name}' not found in test DataFrame")
+        # Extract feature data from included columns
+        train_text = self._extract_feature_data(X_train)
+        test_text = self._extract_feature_data(X_test)
         
-        # Extract text columns and pass to feature extractor
-        train_text = cast(pd.Series, X_train[self.text_column_name])
-        test_text = cast(pd.Series, X_test[self.text_column_name])
+        # Convert to Series for compatibility with FeatureExtractor
+        train_series = pd.Series(train_text)
+        test_series = pd.Series(test_text)
         
         # Get features from extractor
-        train_features, test_features = self.feature_extractor.fit_transform(train_text, test_text)
+        train_features, test_features = self.feature_extractor.fit_transform(train_series, test_series)
         
-        # Convert to DataFrames
-        train_features_df = self._convert_to_dataframe(train_features, self.text_column_name)
-        test_features_df = self._convert_to_dataframe(test_features, self.text_column_name) 
+        # Convert to DataFrames with meaningful prefix
+        feature_prefix = "_".join(self.included_features) if len(self.included_features) <= 3 else "features"
+        train_features_df = self._convert_to_dataframe(train_features, feature_prefix)
+        test_features_df = self._convert_to_dataframe(test_features, feature_prefix) 
         
         # Combine original DataFrames with feature DataFrames
         train_combined = pd.concat([X_train, train_features_df], axis=1)
@@ -111,20 +138,18 @@ class PipelineStep:
         Transform new DataFrame data using fitted extractor.
         
         Args:
-            X: DataFrame containing text data to transform
+            X: DataFrame containing feature data to transform
             
         Returns:
             DataFrame with original columns plus transformed feature columns
         """
-        if self.text_column_name not in X.columns:
-            raise ValueError(f"Column '{self.text_column_name}' not found in DataFrame")
-        
-        # Convert DataFrame column to list and pass to feature extractor
-        text_data = X[self.text_column_name].tolist()
+        # Extract feature data from included columns
+        text_data = self._extract_feature_data(X)
         features = self.feature_extractor.transform(text_data)
         
-        # Convert to DataFrame
-        features_df = self._convert_to_dataframe(features, self.text_column_name)
+        # Convert to DataFrame with meaningful prefix
+        feature_prefix = "_".join(self.included_features) if len(self.included_features) <= 3 else "features"
+        features_df = self._convert_to_dataframe(features, feature_prefix)
         
         # Combine original DataFrame with feature DataFrame
         return pd.concat([X, features_df], axis=1)
@@ -134,7 +159,7 @@ class PipelineStep:
         feature_info = self.feature_extractor.get_feature_info()
         # Add pipeline step information
         if isinstance(feature_info, dict) and "error" not in feature_info:
-            feature_info["text_column_name"] = self.text_column_name
+            feature_info["included_features"] = self.included_features
             feature_info["pipeline_step"] = True
         return feature_info
     
@@ -164,7 +189,7 @@ class PipelineStep:
         
         # Update current instance with loaded data
         self.feature_extractor = loaded_pipeline_step.feature_extractor
-        self.text_column_name = loaded_pipeline_step.text_column_name
+        self.included_features = loaded_pipeline_step.included_features
     
     @classmethod
     def load_from_path(cls, path: str, persistence: PipelineStepPersistence):

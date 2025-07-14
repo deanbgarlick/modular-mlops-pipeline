@@ -48,7 +48,7 @@ class BasePipelineStepPersistence(PipelineStepPersistence):
         """Create comprehensive JSON metadata for PipelineStep."""
         return {
             'pipeline_step_metadata': {
-                'text_column_name': pipeline_step.text_column_name,
+                'included_features': pipeline_step.included_features,
                 'version': '1.0'
             },
             'feature_extractor_metadata': {
@@ -170,7 +170,7 @@ class BasePipelineStepPersistence(PipelineStepPersistence):
         
         # Reconstruct PipelineStep
         from .pipeline_step import PipelineStep
-        pipeline_step = PipelineStep(feature_extractor, ps_metadata['text_column_name'])
+        pipeline_step = PipelineStep(feature_extractor, ps_metadata['included_features'])
         
         print(f"PipelineStep loaded from {self._get_storage_info()}/{path}")
         return pipeline_step
