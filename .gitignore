@@ -1,7 +1,10 @@
-.env
 venv/
 __pycache__/
 *.json
+
+# Service Account Keys (Security)
+deployment-key.json
+ml-training-key.json
 *.pyc
 *.pyo
 *.pyd
