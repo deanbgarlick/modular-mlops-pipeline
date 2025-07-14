@@ -14,13 +14,13 @@ load_dotenv()
 
 if __name__ == "__main__":
     # Configuration: Choose between single run or experiment mode
-    RUN_EXPERIMENTS = True  # Set to False for single run mode
+    RUN_EXPERIMENTS = False  # Set to False for single run mode
     
     if RUN_EXPERIMENTS:
         # Define experiment configurations - Logistic Regression Feature Comparison
         experiment_configs = [
             {
-                "data_source_type": DataSourceType.CSV_FILE,
+                "data_source_type": DataSourceType.NEWSGROUPS,
                 "feature_extractor_type": FeatureExtractorType.COUNT_VECTORIZER,
                 "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
                 "use_class_weights": True,
@@ -30,7 +30,7 @@ if __name__ == "__main__":
                 "description": "Logistic Regression + Count Vectorizer (with class weights)"
             },
             {
-                "data_source_type": DataSourceType.CSV_FILE,
+                "data_source_type": DataSourceType.NEWSGROUPS,
                 "feature_extractor_type": FeatureExtractorType.TFIDF_VECTORIZER,
                 "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
                 "use_class_weights": True,
@@ -40,7 +40,7 @@ if __name__ == "__main__":
                 "description": "Logistic Regression + TF-IDF Vectorizer (with class weights)"
             },
             {
-                "data_source_type": DataSourceType.CSV_FILE,
+                "data_source_type": DataSourceType.NEWSGROUPS,
                 "feature_extractor_type": FeatureExtractorType.HUGGINGFACE_TRANSFORMER,
                 "model_type": SupervisedModelType.LOGISTIC_REGRESSION,
                 "use_class_weights": True,
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     
     else:
         # Single run configuration
-        DATA_SOURCE = DataSourceType.CSV_FILE  # or DataSourceType.NEWSGROUPS
+        DATA_SOURCE = DataSourceType.NEWSGROUPS  # or DataSourceType.CSV_FILE
         FEATURE_EXTRACTOR = FeatureExtractorType.TFIDF_VECTORIZER  # or FeatureExtractorType.COUNT_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
         MODEL = SupervisedModelType.LOGISTIC_REGRESSION  # or SupervisedModelType.PYTORCH_NEURAL_NETWORK or SupervisedModelType.KNN_CLASSIFIER
         USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
