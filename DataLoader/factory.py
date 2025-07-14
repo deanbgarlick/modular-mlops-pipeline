@@ -1,7 +1,7 @@
 """Factory function for creating data loaders."""
 
 from .base import DataLoader, DataSourceType
-from .csv_loader import CSVDataLoader
+from .csv_loader import LocalCSVDataLoader
 from .newsgroups_loader import NewsgroupsDataLoader
 
 
@@ -19,7 +19,7 @@ def create_data_loader(data_source_type: DataSourceType, **kwargs) -> DataLoader
         ValueError: If data_source_type is not supported
     """
     if data_source_type == DataSourceType.CSV_FILE:
-        return CSVDataLoader(**kwargs)
+        return LocalCSVDataLoader(**kwargs)
     elif data_source_type == DataSourceType.NEWSGROUPS:
         return NewsgroupsDataLoader(**kwargs)
     else:

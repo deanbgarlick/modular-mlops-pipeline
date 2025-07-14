@@ -6,8 +6,8 @@ from typing import Tuple
 from .base import DataLoader
 
 
-class CSVDataLoader(DataLoader):
-    """Data loader for CSV files."""
+class LocalCSVDataLoader(DataLoader):
+    """Data loader for local CSV files."""
     
     def __init__(self, file_path: str = "dataset.csv", text_column: str = "customer_review", 
                  target_column: str = "return", sep: str = "\t"):
