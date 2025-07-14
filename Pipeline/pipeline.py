@@ -1,411 +1,325 @@
-"""Core machine learning pipeline functions for text classification."""
+"""Pipeline class for composing transformation steps."""
 
-import pandas as pd
-import numpy as np
+import json
 import os
-import time
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
-from typing import Optional, Dict, Any
+from typing import List, Union, Optional, Dict, Any
 
-from FeatureExtractor import (
-    FeatureExtractor, FeatureExtractorType, create_feature_extractor,
-    PickleGCPExtractorPersistence, PickleLocalExtractorPersistence
-)
-from SupervisedModel import (
-    SupervisedModel, SupervisedModelType, create_model,
-    PickleGCPBucketPersistence, TorchGCPBucketPersistence, PickleLocalFilePersistence
-)
-from DataLoader import DataSourceType, create_data_loader
+# Import the protocol - adjust path as needed
+from PipelineStep.transform_step import TransformationStep, InputData, OutputData, FeatureMatrix
 
 
-def prepare_data(df, test_size=0.2, random_state=42):
-    """Split data into train and test sets."""
-    print(f"\nSplitting data into train/test sets (test_size={test_size})...")
-    X = df['text']
-    y = df['target']
+class PipelinePersistence:
+    """Simple persistence for Pipeline metadata using local JSON files."""
     
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
-    )
-    
-    print(f"Train set: {len(X_train)} samples")
-    print(f"Test set: {len(X_test)} samples")
-    
-    return X_train, X_test, y_train, y_test
-
-
-def create_features(X_train, X_test, feature_extractor: FeatureExtractor):
-    """Create features using the specified feature extractor."""
-    print(f"\nExtracting features...")
-    
-    # Fit on train data and transform both train and test
-    X_train_features, X_test_features = feature_extractor.fit_transform(X_train, X_test)
-    
-    # Print feature extractor info
-    feature_info = feature_extractor.get_feature_info()
-    for key, value in feature_info.items():
-        print(f"{key}: {value}")
-    
-    return X_train_features, X_test_features
-
-
-def train_model(X_train, y_train, model: SupervisedModel, use_class_weights: bool = False):
-    """Train the model."""
-    print(f"\nTraining model...")
-    
-    # Calculate class weights if requested
-    class_weights = None
-    if use_class_weights:
-        from sklearn.utils.class_weight import compute_class_weight
-        classes = np.unique(y_train)
-        weights = compute_class_weight('balanced', classes=classes, y=y_train)
-        class_weights = dict(zip(classes, weights))
-        print(f"Calculated class weights: {class_weights}")
-    
-    # Train the model
-    model.fit(X_train, y_train, class_weights=class_weights)
-    print("Model training completed!")
-    
-    # Print model info
-    model_info = model.get_model_info()
-    print("Model info:")
-    for key, value in model_info.items():
-        print(f"  {key}: {value}")
-    
-    return model
-
-
-def evaluate_model(model, X_test, y_test, target_names):
-    """Evaluate the trained model."""
-    print(f"\nEvaluating model on test set...")
-    
-    # Make predictions
-    y_pred = model.predict(X_test)
-    y_pred_proba = model.predict_proba(X_test)
-    
-    # Calculate metrics
-    accuracy = accuracy_score(y_test, y_pred)
-    f1_macro = f1_score(y_test, y_pred, average='macro')
-    f1_weighted = f1_score(y_test, y_pred, average='weighted')
-    
-    print(f"Test Accuracy: {accuracy:.4f}")
-    print(f"F1-Score (Macro): {f1_macro:.4f}")
-    print(f"F1-Score (Weighted): {f1_weighted:.4f}")
-    
-    # Print detailed results
-    print(f"\nClassification Report:")
-    print(classification_report(y_test, y_pred, target_names=target_names))
-    
-    print(f"\nConfusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
-    
-    return accuracy, f1_macro, f1_weighted, y_pred, y_pred_proba
-
-
-def generate_artifact_name(feature_extractor_type: FeatureExtractorType, 
-                          model_type: SupervisedModelType,
-                          extractor_kwargs: Dict[str, Any],
-                          model_kwargs: Dict[str, Any],
-                          prefix: str = "",
-                          stable_naming: bool = True) -> str:
-    """Generate a name for saved artifacts based on configuration."""
-    # Create a hash-like string from configuration
-    config_str = f"{feature_extractor_type.value}_{model_type.value}"
-    
-    # Add key parameters to the name
-    if extractor_kwargs:
-        for key, value in sorted(extractor_kwargs.items()):
-            if key != 'persistence':  # Skip persistence objects
-                config_str += f"_{key}{value}"
-    
-    if model_kwargs:
-        for key, value in sorted(model_kwargs.items()):
-            if key != 'persistence':  # Skip persistence objects
-                config_str += f"_{key}{value}"
-    
-    # Add timestamp only if not using stable naming
-    if not stable_naming:
-        timestamp = int(time.time())
-        config_str += f"_{timestamp}"
-    
-    return f"{prefix}{config_str}" if prefix else config_str
-
-
-def setup_persistence(use_gcp_persistence: bool = True,
-                     gcp_bucket: Optional[str] = None,
-                     extractor_prefix: str = "feature_extractors/",
-                     model_prefix: str = "models/"):
-    """Setup persistence handlers for feature extractors and models."""
-    
-    # Get bucket name from environment or parameter
-    if gcp_bucket is None:
-        gcp_bucket = os.getenv("GCP_ML_BUCKET", "default-ml-artifacts")
-    
-    if use_gcp_persistence:
-        print(f"Setting up GCP persistence with bucket: {gcp_bucket}")
+    def __init__(self, base_path: str = "pipelines"):
+        """
+        Initialize pipeline persistence.
         
-        # Feature extractor persistence
-        extractor_persistence = PickleGCPExtractorPersistence(
-            bucket_name=gcp_bucket,
-            prefix=extractor_prefix
-        )
+        Args:
+            base_path: Base directory for storing pipeline metadata
+        """
+        self.base_path = base_path
+        os.makedirs(self.base_path, exist_ok=True)
+    
+    def save_metadata(self, metadata: Dict[str, Any], path: str) -> None:
+        """Save pipeline metadata to JSON file."""
+        full_path = os.path.join(self.base_path, f"{path}.json")
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
         
-        # Model persistence (will auto-select Torch vs Pickle based on model type)
-        model_persistence = PickleGCPBucketPersistence(
-            bucket_name=gcp_bucket
-        )
+        with open(full_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+    
+    def load_metadata(self, path: str) -> Dict[str, Any]:
+        """Load pipeline metadata from JSON file."""
+        full_path = os.path.join(self.base_path, f"{path}.json")
         
-    else:
-        print("Setting up local persistence")
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Pipeline metadata not found at: {full_path}")
         
-        # Local persistence
-        extractor_persistence = PickleLocalExtractorPersistence(
-            base_path="saved_extractors"
-        )
-        model_persistence = PickleLocalFilePersistence(
-            base_path="saved_models"
-        )
-    
-    return extractor_persistence, model_persistence
+        with open(full_path, 'r') as f:
+            return json.load(f)
 
 
-def load_or_create_feature_extractor(feature_extractor_type: FeatureExtractorType,
-                                    extractor_kwargs: Dict[str, Any],
-                                    extractor_persistence,
-                                    artifact_name: str,
-                                    force_retrain: bool = False) -> FeatureExtractor:
-    """Load existing feature extractor or create new one."""
-    
-    extractor_path = f"{artifact_name}_extractor"
-    
-    if not force_retrain:
-        try:
-            print(f"Attempting to load existing feature extractor: {extractor_path}")
-            feature_extractor = create_feature_extractor(
-                feature_extractor_type, 
-                persistence=extractor_persistence
-            )
-            feature_extractor.load(extractor_path)
-            print("✓ Successfully loaded existing feature extractor")
-            return feature_extractor
-        except Exception as e:
-            print(f"Failed to load existing extractor: {e}")
-            print("Creating new feature extractor...")
-    
-    # Create new extractor
-    feature_extractor = create_feature_extractor(
-        feature_extractor_type, 
-        persistence=extractor_persistence,
-        **extractor_kwargs
-    )
-    
-    return feature_extractor
-
-
-def load_or_create_model(model_type: SupervisedModelType,
-                        model_kwargs: Dict[str, Any],
-                        model_persistence,
-                        artifact_name: str,
-                        force_retrain: bool = False) -> SupervisedModel:
-    """Load existing model or create new one."""
-    
-    model_path = f"{artifact_name}_model"
-    
-    if not force_retrain:
-        try:
-            print(f"Attempting to load existing model: {model_path}")
-            model = create_model(
-                model_type,
-                persistence=model_persistence
-            )
-            model.load(model_path)
-            print("✓ Successfully loaded existing model")
-            return model
-        except Exception as e:
-            print(f"Failed to load existing model: {e}")
-            print("Creating new model...")
-    
-    # Create new model
-    model = create_model(
-        model_type,
-        persistence=model_persistence,
-        **model_kwargs
-    )
-    
-    return model
-
-
-def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
-                 feature_extractor_type: FeatureExtractorType = FeatureExtractorType.COUNT_VECTORIZER,
-                 model_type: SupervisedModelType = SupervisedModelType.LOGISTIC_REGRESSION,
-                 use_class_weights: bool = False,
-                 loader_kwargs: Optional[Dict[str, Any]] = None,
-                 extractor_kwargs: Optional[Dict[str, Any]] = None, 
-                 model_kwargs: Optional[Dict[str, Any]] = None,
-                 # Persistence options
-                 use_gcp_persistence: bool = True,
-                 gcp_bucket: Optional[str] = None,
-                 save_artifacts: bool = True,
-                 force_retrain: bool = False,
-                 artifact_prefix: str = ""):
-    """Run the complete machine learning pipeline with persistence support.
-    
-    Args:
-        data_source_type: Type of data source to use
-        feature_extractor_type: Type of feature extractor to use
-        model_type: Type of model to use
-        use_class_weights: Whether to use class weights for imbalanced data
-        loader_kwargs: Arguments for data loader
-        extractor_kwargs: Arguments for feature extractor
-        model_kwargs: Arguments for model
-        use_gcp_persistence: Whether to use GCP storage (True) or local storage (False)
-        gcp_bucket: GCP bucket name (uses env var GCP_ML_BUCKET if None)
-        save_artifacts: Whether to save fitted extractors and trained models
-        force_retrain: Whether to force retraining even if saved artifacts exist
-        artifact_prefix: Prefix for artifact names (useful for experiments)
-    
-    Returns:
-        Dict containing results and artifact information
+class Pipeline:
     """
-    if loader_kwargs is None:
-        loader_kwargs = {}
-    if extractor_kwargs is None:
-        extractor_kwargs = {}
-    if model_kwargs is None:
-        model_kwargs = {}
+    A pipeline that composes multiple transformation steps together.
+    
+    The pipeline applies steps sequentially:
+    - First step receives the original input
+    - Each subsequent step receives the output of the previous step
+    - Pipeline itself implements TransformationStep protocol for composability
+    """
+    
+    def __init__(self, steps: List[TransformationStep], persistence: Optional[PipelinePersistence] = None):
+        """
+        Initialize the pipeline with a list of transformation steps.
         
-    print(f"Using data source: {data_source_type.value}")
-    print(f"Using feature extractor: {feature_extractor_type.value}")
-    print(f"Using model: {model_type.value}")
-    print(f"GCP Persistence: {use_gcp_persistence}")
-    print(f"Save artifacts: {save_artifacts}")
-    print(f"Force retrain: {force_retrain}")
-    
-    # Setup persistence
-    extractor_persistence, model_persistence = setup_persistence(
-        use_gcp_persistence=use_gcp_persistence,
-        gcp_bucket=gcp_bucket
-    )
-    
-    # Generate artifact name for this configuration
-    # Use stable naming when not forcing retrain to enable artifact reuse
-    artifact_name = generate_artifact_name(
-        feature_extractor_type, model_type, 
-        extractor_kwargs, model_kwargs, 
-        prefix=artifact_prefix,
-        stable_naming=not force_retrain
-    )
-    print(f"Artifact name: {artifact_name}")
-    if not force_retrain:
-        print("Using stable naming for artifact reuse")
-    
-    # Load data
-    data_loader = create_data_loader(data_source_type, **loader_kwargs)
-    df, target_names = data_loader.load_data()
-    
-    # Print data loader info
-    data_info = data_loader.get_data_info()
-    print("\nData loader info:")
-    for key, value in data_info.items():
-        if key != 'class_distribution':  # Skip detailed distribution for cleaner output
-            print(f"  {key}: {value}")
-    
-    # Prepare train/test splits
-    X_train, X_test, y_train, y_test = prepare_data(df)
-    
-    # Load or create feature extractor
-    feature_extractor = load_or_create_feature_extractor(
-        feature_extractor_type, extractor_kwargs, extractor_persistence,
-        artifact_name, force_retrain
-    )
-    
-    # Create features (fit if new extractor, just transform if loaded)
-    if hasattr(feature_extractor, 'is_fitted') and feature_extractor.is_fitted:
-        print("\nUsing pre-fitted feature extractor...")
-        X_train_transformed = feature_extractor.transform(list(X_train))
-        X_test_transformed = feature_extractor.transform(list(X_test))
+        Args:
+            steps: List of objects implementing TransformationStep protocol
+                  (e.g., FeatureExtractor instances, SupervisedModel instances)
+            persistence: Pipeline persistence handler for saving/loading
         
-        # Print feature extractor info
-        feature_info = feature_extractor.get_feature_info()
-        for key, value in feature_info.items():
-            print(f"{key}: {value}")
-    else:
-        X_train_transformed, X_test_transformed = create_features(
-            X_train, X_test, feature_extractor
-        )
-    
-    # Load or create model
-    model = load_or_create_model(
-        model_type, model_kwargs, model_persistence,
-        artifact_name, force_retrain
-    )
-    
-    # Train model if not already trained
-    if not (hasattr(model, 'is_fitted') and getattr(model, 'is_fitted', False)) or force_retrain:
-        trained_model = train_model(X_train_transformed, y_train, model, use_class_weights)
-    else:
-        print("\nUsing pre-trained model...")
-        trained_model = model
+        Raises:
+            ValueError: If steps list is empty
+        """
+        if not steps:
+            raise ValueError("Pipeline must have at least one step")
         
-        # Print model info
-        model_info = model.get_model_info()
-        print("Model info:")
-        for key, value in model_info.items():
-            print(f"  {key}: {value}")
+        self.steps = steps
+        self.persistence = persistence or PipelinePersistence()
     
-    # Evaluate model
-    accuracy, f1_macro, f1_weighted, y_pred, y_pred_proba = evaluate_model(
-        trained_model, X_test_transformed, y_test, target_names
-    )
-    
-    # Save artifacts if requested
-    saved_paths = {}
-    if save_artifacts:
-        try:
-            extractor_path = f"{artifact_name}_extractor"
-            model_path = f"{artifact_name}_model"
+    def fit_transform(self, X_train: InputData, X_test: Optional[InputData] = None,
+                     y_train: Optional[Any] = None, y_test: Optional[Any] = None) -> OutputData:
+        """
+        Fit the pipeline and transform both train and test sets.
+        
+        The first step is fitted using fit_transform, subsequent steps use transform only.
+        
+        Args:
+            X_train: Training data 
+            X_test: Test data (optional)
+            y_train: Training target labels (optional, for supervised learning steps)
+            y_test: Test target labels (optional, for supervised learning steps)
             
-            print(f"\nSaving artifacts...")
-            feature_extractor.save(extractor_path)
-            trained_model.save(model_path)
+        Returns:
+            OutputData: Transformed features from the final step
+        """
+        # Start with the first step - this is the only one that gets fitted
+        if X_test is not None:
+            # If we have test data, fit_transform should return a tuple
+            # Try to call with target parameters if the step supports them
+            try:
+                result = self.steps[0].fit_transform(X_train, X_test, y_train, y_test)  # type: ignore[call-arg]
+            except TypeError:
+                # Fallback for steps that don't support target parameters
+                result = self.steps[0].fit_transform(X_train, X_test)  # type: ignore[call-arg]
+                
+            if isinstance(result, tuple) and len(result) == 2:
+                current_train, current_test = result
+            else:
+                # Handle case where first step doesn't return tuple despite X_test being provided
+                current_train = result
+                current_test = self.steps[0].transform(X_test) if X_test is not None else None
+        else:
+            # No test data, just transform training data
+            # Try to call with target parameters if the step supports them
+            try:
+                result = self.steps[0].fit_transform(X_train, None, y_train, None)  # type: ignore[call-arg]
+            except TypeError:
+                # Fallback for steps that don't support target parameters
+                result = self.steps[0].fit_transform(X_train)  # type: ignore[call-arg]
+                
+            if isinstance(result, tuple):
+                # In case fit_transform returns tuple even without X_test
+                current_train = result[0]
+                current_test = None
+            else:
+                current_train = result
+                current_test = None
+        
+        # Apply remaining steps using transform only
+        for step in self.steps[1:]:
+            current_train = step.transform(current_train)  # type: ignore[arg-type]
+            if current_test is not None:
+                current_test = step.transform(current_test)  # type: ignore[arg-type]
+        
+        # Return appropriate format
+        if current_test is not None:
+            return current_train, current_test  # type: ignore[return-value]
+        else:
+            return current_train  # type: ignore[return-value]
+    
+    def transform(self, X: InputData) -> FeatureMatrix:
+        """
+        Transform new data through the entire pipeline.
+        
+        Args:
+            X: Input data to transform
             
-            saved_paths = {
-                "extractor_path": extractor_path,
-                "model_path": model_path,
-                "bucket": gcp_bucket if use_gcp_persistence else "local",
-                "artifact_name": artifact_name
+        Returns:
+            FeatureMatrix: Transformed features from the final step
+        """
+        current: Union[InputData, FeatureMatrix] = X
+        for step in self.steps:
+            current = step.transform(current)
+        # After transformation through all steps, current should be FeatureMatrix
+        return current  # type: ignore[return-value]
+    
+    def save(self, path: str) -> None:
+        """
+        Save the pipeline by saving each step individually and creating reconstruction metadata.
+        
+        Args:
+            path: Base path for saving the pipeline
+            
+        Raises:
+            ValueError: If any step lacks a save method or persistence object
+        """
+        # Pre-validate that all steps can be saved
+        validation_errors = []
+        for i, step in enumerate(self.steps):
+            step_class_name = step.__class__.__name__
+            
+            # Check if step has save method
+            if not (hasattr(step, 'save') and callable(getattr(step, 'save'))):
+                validation_errors.append(f"Step {i} ({step_class_name}) lacks a save method")
+            
+            # Check if step has persistence object
+            if not (hasattr(step, 'persistence') and step.persistence is not None):  # type: ignore[attr-defined]
+                validation_errors.append(f"Step {i} ({step_class_name}) lacks a persistence object")
+        
+        # Fail early if any validation errors
+        if validation_errors:
+            error_msg = "Cannot save pipeline due to the following issues:\n" + "\n".join(validation_errors)
+            raise ValueError(error_msg)
+        
+        pipeline_metadata = {
+            'version': '1.0',
+            'num_steps': len(self.steps),
+            'steps': []
+        }
+        
+        # Save each step and collect metadata
+        for i, step in enumerate(self.steps):
+            step_path = f"{path}_step_{i}"
+            step_metadata = {
+                'index': i,
+                'class_name': step.__class__.__name__,
+                'module_name': step.__class__.__module__,
+                'save_path': step_path
             }
-            print(f"✓ Artifacts saved successfully")
             
-        except Exception as e:
-            print(f"⚠ Failed to save artifacts: {e}")
-    
-    # Example prediction on new text
-    print(f"\nExample prediction:")
-    sample_text = ["God is great and religion brings peace to the world"]
-    
-    # Transform sample text using the fitted feature extractor
-    try:
-        sample_transformed = feature_extractor.transform(sample_text)
-        prediction = trained_model.predict(sample_transformed)[0]
-        probability = trained_model.predict_proba(sample_transformed)[0]
+            # Capture persistence information (we've already validated it exists)
+            persistence_obj = step.persistence  # type: ignore[attr-defined]
+            persistence_metadata = {
+                'has_persistence': True,
+                'persistence_class': persistence_obj.__class__.__name__,
+                'persistence_module': persistence_obj.__class__.__module__,
+                'persistence_config': {}
+            }
+            
+            # Capture common persistence configuration attributes
+            for attr in ['bucket_name', 'base_path', 'prefix', 'region']:
+                if hasattr(persistence_obj, attr):
+                    persistence_metadata['persistence_config'][attr] = getattr(persistence_obj, attr)
+            
+            step_metadata['persistence'] = persistence_metadata
+            
+            # Save the step (we've already validated it has a save method)
+            try:
+                step.save(step_path)  # type: ignore[attr-defined]
+                step_metadata['save_successful'] = True
+                print(f"Saved step {i}: {step.__class__.__name__}")
+            except Exception as e:
+                step_metadata['save_successful'] = False
+                step_metadata['save_error'] = str(e)
+                raise ValueError(f"Failed to save step {i} ({step.__class__.__name__}): {e}") from e
+            
+            pipeline_metadata['steps'].append(step_metadata)
         
-        print(f"Sample text: {sample_text[0]}")
-        print(f"Predicted class: {target_names[prediction]}")
-        print(f"Prediction probabilities: {dict(zip(target_names, probability))}")
-    except Exception as e:
-        print(f"Error transforming sample text: {e}")
+        # Save pipeline metadata
+        self.persistence.save_metadata(pipeline_metadata, path)
+        print(f"Pipeline metadata saved: {path}")
     
-    return {
-        "accuracy": accuracy,
-        "f1_macro": f1_macro,
-        "f1_weighted": f1_weighted,
-        "predictions": y_pred,
-        "target_names": target_names,
-        "fitted_extractor": feature_extractor,
-        "trained_model": trained_model,
-        "saved_paths": saved_paths,
-        "artifact_name": artifact_name,
-        "training_time": time.time()  # Could be used for performance tracking
-    } 
+    def load(self, path: str) -> None:
+        """
+        Load the pipeline by reconstructing each step from metadata.
+        
+        Args:
+            path: Base path for loading the pipeline
+        """
+        # Load pipeline metadata
+        pipeline_metadata = self.persistence.load_metadata(path)
+        
+        # Reconstruct steps
+        loaded_steps = []
+        for step_metadata in pipeline_metadata['steps']:
+            if step_metadata.get('save_successful', False):
+                try:
+                    # Dynamically import the step class
+                    import importlib
+                    step_module = importlib.import_module(step_metadata['module_name'])
+                    step_class = getattr(step_module, step_metadata['class_name'])
+                    
+                    # Try to use load_from_path if available
+                    if hasattr(step_class, 'load_from_path') and callable(getattr(step_class, 'load_from_path')):
+                        # For classes like PipelineStep that have class method load_from_path
+                        # Check if we need to reconstruct persistence for this step
+                        persistence_info = step_metadata.get('persistence', {})
+                        if persistence_info.get('has_persistence', False):
+                            # Reconstruct the persistence object
+                            persistence_module = importlib.import_module(persistence_info['persistence_module'])
+                            persistence_class = getattr(persistence_module, persistence_info['persistence_class'])
+                            persistence_config = persistence_info.get('persistence_config', {})
+                            
+                            # Create persistence instance with saved configuration
+                            if persistence_config:
+                                # Filter out None values and create persistence with available config
+                                filtered_config = {k: v for k, v in persistence_config.items() if v is not None}
+                                persistence = persistence_class(**filtered_config)
+                            else:
+                                persistence = persistence_class()
+                            
+                            step = step_class.load_from_path(step_metadata['save_path'], persistence)
+                        else:
+                            step = step_class.load_from_path(step_metadata['save_path'])
+                    else:
+                        # Create instance and try to load
+                        step = step_class()
+                        if hasattr(step, 'load') and callable(getattr(step, 'load')):
+                            step.load(step_metadata['save_path'])
+                        else:
+                            raise ValueError(f"Cannot load step {step_metadata['index']}: no load method available")
+                    
+                    loaded_steps.append(step)
+                    print(f"Loaded step {step_metadata['index']}: {step_metadata['class_name']}")
+                
+                except Exception as e:
+                    raise ValueError(f"Failed to load step {step_metadata['index']} ({step_metadata['class_name']}): {e}")
+            else:
+                raise ValueError(f"Cannot load step {step_metadata['index']}: was not saved successfully")
+        
+        # Update pipeline with loaded steps
+        self.steps = loaded_steps
+        print(f"Pipeline loaded with {len(self.steps)} steps")
+    
+    @classmethod
+    def load_from_path(cls, path: str, persistence: Optional[PipelinePersistence] = None) -> 'Pipeline':
+        """
+        Class method to create a new Pipeline instance and load from path.
+        
+        Args:
+            path: Path to load the pipeline from
+            persistence: Pipeline persistence handler
+            
+        Returns:
+            Pipeline: New instance with loaded pipeline
+        """
+        pipeline = cls([], persistence=persistence)
+        pipeline.load(path)
+        return pipeline
+    
+    def add_step(self, step: TransformationStep) -> 'Pipeline':
+        """
+        Add a new step to the end of the pipeline.
+        
+        Args:
+            step: TransformationStep to add
+            
+        Returns:
+            Pipeline: New pipeline instance with the additional step
+        """
+        return Pipeline(self.steps + [step], persistence=self.persistence)
+    
+    def __len__(self) -> int:
+        """Return the number of steps in the pipeline."""
+        return len(self.steps)
+    
+    def __getitem__(self, index: int) -> TransformationStep:
+        """Get a specific step by index."""
+        return self.steps[index]
+    
+    def __repr__(self) -> str:
+        """String representation of the pipeline."""
+        step_names = [step.__class__.__name__ for step in self.steps]
+        return f"Pipeline(steps={step_names})"

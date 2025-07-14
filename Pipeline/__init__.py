@@ -5,7 +5,7 @@ for text classification, including data preparation, feature creation,
 model training, and evaluation.
 """
 
-from .pipeline import (
+from .run_pipeline import (
     prepare_data,
     create_features, 
     train_model,
