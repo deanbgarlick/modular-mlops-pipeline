@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from DataLoader import DataSourceType
 from FeatureExtractor import FeatureExtractorType  
 from SupervisedModel import SupervisedModelType
-from Experiments import run_experiments
+from Experiments.experiments import run_experiments
 
 # Load environment variables from .env file
 load_dotenv()
@@ -47,7 +47,7 @@ def run_experiment_suite(persistence_config):
     print("EXPERIMENT SUITE MODE")
     print("="*60)
     
-    # Define experiment configurations with persistence
+    # Define experiment configurations for the new Pipeline interface
     experiment_configs = [
         {
             "data_source_type": DataSourceType.NEWSGROUPS,
@@ -57,10 +57,7 @@ def run_experiment_suite(persistence_config):
             "loader_kwargs": {"categories": ['alt.atheism', 'soc.religion.christian']},
             "extractor_kwargs": {"max_features": 10000},
             "model_kwargs": {},
-            "description": "Logistic Regression + Count Vectorizer (with class weights)",
-            # Add persistence to each experiment
-            **persistence_config,
-            "artifact_prefix": "exp1_"
+            "description": "Logistic Regression + Count Vectorizer (with class weights)"
         },
         {
             "data_source_type": DataSourceType.NEWSGROUPS,
@@ -70,9 +67,7 @@ def run_experiment_suite(persistence_config):
             "loader_kwargs": {"categories": ['alt.atheism', 'soc.religion.christian']},
             "extractor_kwargs": {"max_features": 10000, "min_df": 2, "max_df": 0.8},
             "model_kwargs": {},
-            "description": "Logistic Regression + TF-IDF Vectorizer (with class weights)",
-            **persistence_config,
-            "artifact_prefix": "exp2_"
+            "description": "Logistic Regression + TF-IDF Vectorizer (with class weights)"
         },
         {
             "data_source_type": DataSourceType.NEWSGROUPS,
@@ -82,9 +77,7 @@ def run_experiment_suite(persistence_config):
             "loader_kwargs": {"categories": ['alt.atheism', 'soc.religion.christian']},
             "extractor_kwargs": {"max_features": 5000, "min_df": 2},
             "model_kwargs": {"hidden_size": 128, "epochs": 30},
-            "description": "PyTorch NN + TF-IDF Vectorizer (with class weights)",
-            **persistence_config,
-            "artifact_prefix": "exp3_"
+            "description": "PyTorch NN + TF-IDF Vectorizer (with class weights)"
         }
     ]
     
@@ -135,6 +128,9 @@ def demonstrate_persistence_features():
     print("   • Version control your ML artifacts")
     print("   • Seamless deployment with pre-trained components")
     
+    print("\n⚠️  Note: Advanced persistence features are currently being refactored for the new Pipeline interface.")
+    print("    Basic experiment execution is available now.")
+    
     return persistence_config
 
 
@@ -161,11 +157,10 @@ if __name__ == "__main__":
     # Show next steps
     print("\n🔄 Next Steps:")
     if persistence_config['save_artifacts']:
-        print("   • Check your GCP bucket or local storage for saved artifacts")
-        print("   • Run again with FORCE_RETRAIN=false to load existing artifacts")
-        print("   • Use saved artifacts for production inference")
+        print("   • Advanced persistence features are being updated for the new Pipeline interface")
+        print("   • Basic experiment results are saved to JSON file")
+        print("   • Use saved results for analysis and comparison")
     
     print("   • Experiment with different configurations")
-    print("   • Run single experiments using: python main_single_run.py")
-    print("   • Deploy to GCP VMs using: python deploy.py")
-    print("   • Run hyperparameter optimization: python test_hyperparameter_optimization.py") 
+    print("   • Run single experiments using Pipeline.run_pipeline.py")
+    print("   • Explore new Pipeline class capabilities") 
