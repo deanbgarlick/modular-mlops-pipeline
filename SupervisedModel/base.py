@@ -94,8 +94,17 @@ class SupervisedModel(ABC):
         if not hasattr(self, 'model') or self.model is None:
             raise ValueError("Model must be fitted before saving")
         
+        # Create a copy of the model without persistence object (which contains unpickleable clients)
+        model_copy = self.__class__.__new__(self.__class__)
+        for attr_name in dir(self):
+            if not attr_name.startswith('_') and attr_name != 'persistence':
+                attr_value = getattr(self, attr_name)
+                if not callable(attr_value):
+                    setattr(model_copy, attr_name, attr_value)
+        
         model_data = {
             'model': self.model,
+            'model_copy': model_copy,
             'model_info': self.get_model_info(),
             'model_type': self.__class__.__name__
         }
@@ -118,6 +127,15 @@ class SupervisedModel(ABC):
             raise ValueError("Model data missing 'model' key")
         
         self.model = model_data['model']
+        
+        # Load model copy attributes if available
+        if 'model_copy' in model_data:
+            model_copy = model_data['model_copy']
+            for attr_name in dir(model_copy):
+                if not attr_name.startswith('_') and hasattr(model_copy, attr_name):
+                    attr_value = getattr(model_copy, attr_name)
+                    if not callable(attr_value):
+                        setattr(self, attr_name, attr_value)
         
         # Set fitted flag if it exists
         if hasattr(self, 'is_fitted'):

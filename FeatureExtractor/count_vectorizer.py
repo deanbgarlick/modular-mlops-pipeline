@@ -2,17 +2,27 @@
 
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
 
 from .base import FeatureExtractor
+from .persistence import FeatureExtractorPersistence
 
 
 class CountVectorizerExtractor(FeatureExtractor):
     """Feature extractor using sklearn's CountVectorizer."""
     
-    def __init__(self, max_features: int = 10000):
+    def __init__(self, max_features: int = 10000, persistence: Optional[FeatureExtractorPersistence] = None):
+        """
+        Initialize CountVectorizer extractor.
+        
+        Args:
+            max_features: Maximum number of features to extract
+            persistence: Feature extractor persistence handler
+        """
+        super().__init__(persistence=persistence)
         self.max_features = max_features
         self.vectorizer = None
+        self.is_fitted = False
     
     def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[Any, Any]:
         """Fit count vectorizer on training data and transform both sets."""
@@ -22,6 +32,7 @@ class CountVectorizerExtractor(FeatureExtractor):
         X_train_transformed = self.vectorizer.fit_transform(X_train)
         X_test_transformed = self.vectorizer.transform(X_test)
         
+        self.is_fitted = True
         return X_train_transformed, X_test_transformed
     
     def transform(self, X: list) -> Any:
