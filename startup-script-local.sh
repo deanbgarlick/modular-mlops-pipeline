@@ -21,18 +21,49 @@ cd /opt/ml-training
 
 # Get metadata from gcloud
 echo "Retrieving metadata..."
-REPO_URL=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/repo-url" -H "Metadata-Flavor: Google")
-BRANCH=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/branch" -H "Metadata-Flavor: Google" 2>/dev/null || echo "main")
 AUTO_SHUTDOWN=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/auto-shutdown" -H "Metadata-Flavor: Google" 2>/dev/null || echo "true")
 
 echo "Configuration:"
-echo "  Repository: $REPO_URL"
-echo "  Branch: $BRANCH"
 echo "  Auto-shutdown: $AUTO_SHUTDOWN"
+echo "  Working directory: $(pwd)"
 
-# Clone the repository
-echo "Cloning repository..."
-git clone -b $BRANCH $REPO_URL .
+# Create a simple main.py for testing
+echo "Creating test training script..."
+cat > main.py << 'EOF'
+#!/usr/bin/env python3
+"""Simple ML Training Test Script"""
+
+import time
+import json
+import os
+from datetime import datetime
+
+print("🚀 Starting ML Training Test")
+print(f"📅 Start time: {datetime.now()}")
+print(f"📁 Working directory: {os.getcwd()}")
+
+# Simulate training for 30 seconds
+print("🔄 Training in progress...")
+for i in range(6):
+    print(f"   Epoch {i+1}/6 - Loss: {1.0 - i*0.15:.3f}")
+    time.sleep(5)
+
+# Create training results
+results = {
+    "training_completed": True,
+    "final_loss": 0.125,
+    "epochs": 6,
+    "duration_seconds": 30,
+    "timestamp": datetime.now().isoformat()
+}
+
+print(f"💾 Saving results: {results}")
+with open("training_results.json", "w") as f:
+    json.dump(results, f, indent=2)
+
+print("✅ Training completed successfully!")
+print(f"📅 End time: {datetime.now()}")
+EOF
 
 # Create virtual environment
 echo "Setting up Python virtual environment..."
@@ -42,21 +73,14 @@ source venv/bin/activate
 # Upgrade pip
 pip install --upgrade pip
 
-# Install dependencies
+# Install basic dependencies
 echo "Installing Python dependencies..."
-if [ -f requirements.txt ]; then
-    echo "Installing from requirements.txt"
-    pip install -r requirements.txt
-else
-    echo "No requirements.txt found, installing common ML packages"
-    pip install pandas numpy scikit-learn torch transformers sentence-transformers google-cloud-storage python-dotenv
-fi
+pip install google-cloud-storage python-dotenv
 
 # Create .env file with basic GCP configuration
 echo "Creating .env file..."
 cat > .env << 'EOF'
 # GCP Configuration
-# Add your bucket names here or override in your code
 GCP_BUCKET_NAME=your-ml-data-bucket
 GCP_MODEL_BUCKET=your-ml-models-bucket
 EOF
@@ -105,16 +129,6 @@ if [ -n "$LOG_BUCKET" ]; then
     echo "Uploading training results..."
     if [ -f "training_results.json" ]; then
         gsutil cp training_results.json gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}_results.json
-    fi
-
-    if [ -f "model.pkl" ] || [ -f "model.pt" ]; then
-        echo "Uploading trained models..."
-        gsutil cp model.* gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/ 2>/dev/null || true
-    fi
-
-    # Upload any other important files
-    if [ -d "outputs" ]; then
-        gsutil -m cp -r outputs gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/ || true
     fi
 
     echo "Logs and results saved to: gs://$LOG_BUCKET/${VM_NAME}_${TIMESTAMP}/"

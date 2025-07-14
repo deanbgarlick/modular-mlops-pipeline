@@ -34,7 +34,7 @@ class MLTrainingDeployer:
             vm_name = f"ml-training-{int(time.time())}"
             
         # Read startup script
-        with open('startup-script.sh', 'r') as f:
+        with open('startup-script-local.sh', 'r') as f:
             startup_script = f.read()
             
         # Configure instance
@@ -46,13 +46,13 @@ class MLTrainingDeployer:
                 "boot": True,
                 "auto_delete": True,
                 "initialize_params": {
-                    "source_image": "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts",
+                    "source_image": "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts",
                     "disk_size_gb": 50,
                     "disk_type": f"zones/{self.config.zone}/diskTypes/pd-ssd"
                 }
             }],
             "network_interfaces": [{
-                "access_configs": [{"type": "ONE_TO_ONE_NAT"}]
+                "network": f"projects/{self.config.project_id}/global/networks/default"
             }],
             "metadata": {
                 "items": [
@@ -70,13 +70,18 @@ class MLTrainingDeployer:
         }
         
         # Create instance
+        instance = compute_v1.Instance(instance_config)
         operation = self.compute_client.insert(
             project=self.config.project_id,
             zone=self.config.zone,
-            instance_resource=instance_config
+            instance_resource=instance
         )
         
         print(f"✓ VM {vm_name} deployed successfully!")
+        print(f"📊 Logs will be saved to: gs://{self.config.project_id}-ml-logs/{vm_name}_<timestamp>/")
+        print(f"🔄 Stream logs: python deploy.py --action stream --name {vm_name}")
+        print(f"📋 Monitor VM: python deploy.py --action monitor --name {vm_name}")
+        print(f"📜 Get logs: ./get_logs.sh {vm_name}")
         return vm_name
     
     def get_logs(self, vm_name: str) -> str:
@@ -108,12 +113,23 @@ class MLTrainingDeployer:
             except Exception as e:
                 print(f"✗ VM not found: {e}")
                 break
+    
+    def stream_logs(self, vm_name: str):
+        """Stream VM logs in real-time"""
+        print(f"🔄 Streaming logs from {vm_name}... (Ctrl+C to stop)")
+        try:
+            subprocess.run([
+                "gcloud", "compute", "instances", "tail-serial-port-output",
+                vm_name, f"--zone={self.config.zone}"
+            ])
+        except KeyboardInterrupt:
+            print("\n📋 Log streaming stopped")
 
 def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Deploy ML training to GCP VM')
-    parser.add_argument('--action', choices=['deploy', 'logs', 'monitor'], default='deploy', help='Action to perform (default: deploy)')
+    parser.add_argument('--action', choices=['deploy', 'logs', 'monitor', 'stream'], default='deploy', help='Action to perform (default: deploy)')
     parser.add_argument('--name', default=None, help='VM name (auto-generated if not provided)')
     parser.add_argument('--machine-type', default='n1-standard-1', help='Machine type (default: n1-standard-1)')
     parser.add_argument('--service-account', default=None, help='Service account email (default: uses environment ML_SERVICE_ACCOUNT or VM default)')
@@ -147,6 +163,12 @@ def main():
             print("--name required for monitor")
             sys.exit(1)
         deployer.monitor_vm(args.name)
+        
+    elif args.action == 'stream':
+        if not args.name:
+            print("--name required for stream")
+            sys.exit(1)
+        deployer.stream_logs(args.name)
 
 if __name__ == "__main__":
     main() 
