@@ -73,7 +73,8 @@ class Pipeline:
         """
         Fit the pipeline and transform both train and test sets.
         
-        The first step is fitted using fit_transform, subsequent steps use transform only.
+        Each step is fitted using fit_transform in sequence, with each step receiving
+        the transformed output from the previous step.
         
         Args:
             X_train: Training data 
@@ -84,44 +85,42 @@ class Pipeline:
         Returns:
             OutputData: Transformed features from the final step
         """
-        # Start with the first step - this is the only one that gets fitted
-        if X_test is not None:
-            # If we have test data, fit_transform should return a tuple
-            # Try to call with target parameters if the step supports them
-            try:
-                result = self.steps[0].fit_transform(X_train, X_test, y_train, y_test)  # type: ignore[call-arg]
-            except TypeError:
-                # Fallback for steps that don't support target parameters
-                result = self.steps[0].fit_transform(X_train, X_test)  # type: ignore[call-arg]
-                
-            if isinstance(result, tuple) and len(result) == 2:
-                current_train, current_test = result
-            else:
-                # Handle case where first step doesn't return tuple despite X_test being provided
-                current_train = result
-                current_test = self.steps[0].transform(X_test) if X_test is not None else None
-        else:
-            # No test data, just transform training data
-            # Try to call with target parameters if the step supports them
-            try:
-                result = self.steps[0].fit_transform(X_train, None, y_train, None)  # type: ignore[call-arg]
-            except TypeError:
-                # Fallback for steps that don't support target parameters
-                result = self.steps[0].fit_transform(X_train)  # type: ignore[call-arg]
-                
-            if isinstance(result, tuple):
-                # In case fit_transform returns tuple even without X_test
-                current_train = result[0]
-                current_test = None
-            else:
-                current_train = result
-                current_test = None
+        current_train = X_train
+        current_test = X_test
         
-        # Apply remaining steps using transform only
-        for step in self.steps[1:]:
-            current_train = step.transform(current_train)  # type: ignore[arg-type]
+        # Apply each step using fit_transform in sequence
+        for step in self.steps:
             if current_test is not None:
-                current_test = step.transform(current_test)  # type: ignore[arg-type]
+                # If we have test data, fit_transform should return a tuple
+                # Try to call with target parameters if the step supports them
+                try:
+                    result = step.fit_transform(current_train, current_test, y_train, y_test)  # type: ignore[call-arg]
+                except TypeError:
+                    # Fallback for steps that don't support target parameters
+                    result = step.fit_transform(current_train, current_test)  # type: ignore[call-arg]
+                    
+                if isinstance(result, tuple) and len(result) == 2:
+                    current_train, current_test = result
+                else:
+                    # Handle case where step doesn't return tuple despite X_test being provided
+                    current_train = result
+                    current_test = step.transform(current_test) if current_test is not None else None
+            else:
+                # No test data, just transform training data
+                # Try to call with target parameters if the step supports them
+                try:
+                    result = step.fit_transform(current_train, None, y_train, None)  # type: ignore[call-arg]
+                except TypeError:
+                    # Fallback for steps that don't support target parameters
+                    result = step.fit_transform(current_train)  # type: ignore[call-arg]
+                    
+                if isinstance(result, tuple):
+                    # In case fit_transform returns tuple even without X_test
+                    current_train = result[0]
+                    current_test = None
+                else:
+                    current_train = result
+                    current_test = None
         
         # Return appropriate format
         if current_test is not None:
