@@ -2,9 +2,10 @@
 
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
-from typing import Tuple, Any, Optional
+from typing import Tuple, List, Optional, cast
+import scipy.sparse
 
-from .base import FeatureExtractor
+from .base import FeatureExtractor, FeatureMatrix
 from .persistence import FeatureExtractorPersistence
 
 
@@ -24,22 +25,22 @@ class CountVectorizerExtractor(FeatureExtractor):
         self.vectorizer = None
         self.is_fitted = False
     
-    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[Any, Any]:
+    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[FeatureMatrix, FeatureMatrix]:
         """Fit count vectorizer on training data and transform both sets."""
         print(f"Creating count vectorizer features (max_features={self.max_features})...")
         self.vectorizer = CountVectorizer(max_features=self.max_features, stop_words='english')
         
-        X_train_transformed = self.vectorizer.fit_transform(X_train)
-        X_test_transformed = self.vectorizer.transform(X_test)
+        X_train_transformed = cast(scipy.sparse.csr_matrix, self.vectorizer.fit_transform(X_train))
+        X_test_transformed = cast(scipy.sparse.csr_matrix, self.vectorizer.transform(X_test))
         
         self.is_fitted = True
         return X_train_transformed, X_test_transformed
     
-    def transform(self, X: list) -> Any:
+    def transform(self, X: List[str]) -> FeatureMatrix:
         """Transform new text data using fitted vectorizer."""
         if self.vectorizer is None:
             raise ValueError("Vectorizer not fitted yet. Call fit_transform first.")
-        return self.vectorizer.transform(X)
+        return cast(scipy.sparse.csr_matrix, self.vectorizer.transform(X))
     
     def get_feature_info(self) -> dict:
         """Return information about count vectorizer features."""

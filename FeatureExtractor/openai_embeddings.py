@@ -1,12 +1,12 @@
 """OpenAI embeddings feature extractor implementation."""
 
 import pandas as pd
-from typing import Tuple, Any, List, Optional
+from typing import Tuple, List, Optional
 import numpy as np
 import os
 import time
 
-from .base import FeatureExtractor
+from .base import FeatureExtractor, FeatureMatrix
 from .persistence import FeatureExtractorPersistence
 
 
@@ -101,7 +101,7 @@ class OpenAIEmbeddingsExtractor(FeatureExtractor):
         
         return np.array(all_embeddings)
     
-    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[Any, Any]:
+    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[FeatureMatrix, FeatureMatrix]:
         """Create embeddings using OpenAI API for both train and test sets."""
         print(f"Creating OpenAI embeddings using model: {self.model_name}")
         
@@ -120,7 +120,7 @@ class OpenAIEmbeddingsExtractor(FeatureExtractor):
         self.is_fitted = True
         return X_train_transformed, X_test_transformed
     
-    def transform(self, X: list) -> Any:
+    def transform(self, X: List[str]) -> FeatureMatrix:
         """Transform new text data using OpenAI embeddings."""
         if self.client is None:
             raise ValueError("Client not initialized. Call fit_transform first.")

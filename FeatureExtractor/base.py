@@ -1,11 +1,16 @@
 """Base classes and enums for feature extractors."""
 
 import pandas as pd
+import numpy as np
+import scipy.sparse
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Tuple, Any, Optional
+from typing import Tuple, Any, Optional, Union, List
 
 from .persistence import FeatureExtractorPersistence, PickleGCPExtractorPersistence, HuggingFaceExtractorPersistence
+
+# Type alias for feature matrices that can be returned by extractors
+FeatureMatrix = Union[np.ndarray, scipy.sparse.csr_matrix, pd.DataFrame]
 
 
 class FeatureExtractorType(Enum):
@@ -29,13 +34,16 @@ class FeatureExtractor(ABC):
                         (PickleGCPExtractorPersistence for most extractors, HuggingFaceExtractorPersistence for transformers).
         """
         if persistence is None:
-            # Choose appropriate persistence based on extractor type
-            if self._is_huggingface_extractor():
-                self.persistence = HuggingFaceExtractorPersistence(bucket_name="default-extractor-bucket")
-            else:
-                self.persistence = PickleGCPExtractorPersistence("default-extractor-bucket")
-        else:
-            self.persistence = persistence
+            raise ValueError("Persistence is required for feature extractors")
+
+        self.persistence = persistence
+        # Choose appropriate persistence based on extractor type
+        #     if self._is_huggingface_extractor():
+        #         self.persistence = HuggingFaceExtractorPersistence(bucket_name="default-extractor-bucket")
+        #     else:
+        #         self.persistence = PickleGCPExtractorPersistence("default-extractor-bucket")
+        # else:
+        #     self.persistence = persistence
     
     def _is_huggingface_extractor(self) -> bool:
         """Check if this is a HuggingFace transformer that should use specialized persistence."""
@@ -43,7 +51,7 @@ class FeatureExtractor(ABC):
         return 'HuggingFace' in extractor_class_name or 'Transformer' in extractor_class_name
     
     @abstractmethod
-    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[Any, Any]:
+    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[FeatureMatrix, FeatureMatrix]:
         """
         Fit on training data and transform both train and test sets.
         
@@ -57,7 +65,7 @@ class FeatureExtractor(ABC):
         pass
     
     @abstractmethod
-    def transform(self, X: list) -> Any:
+    def transform(self, X: List[str]) -> FeatureMatrix:
         """
         Transform new text data using fitted extractor.
         

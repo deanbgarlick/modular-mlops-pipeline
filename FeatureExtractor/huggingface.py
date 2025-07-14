@@ -1,9 +1,9 @@
 """HuggingFace transformer feature extractor implementation."""
 
 import pandas as pd
-from typing import Tuple, Any, Optional
+from typing import Tuple, List, Optional
 
-from .base import FeatureExtractor
+from .base import FeatureExtractor, FeatureMatrix
 from .persistence import FeatureExtractorPersistence
 
 
@@ -25,7 +25,7 @@ class HuggingFaceExtractor(FeatureExtractor):
         self.embedding_dim = None
         self.is_fitted = False
     
-    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[Any, Any]:
+    def fit_transform(self, X_train: pd.Series, X_test: pd.Series) -> Tuple[FeatureMatrix, FeatureMatrix]:
         """Create sentence embeddings using HuggingFace transformer."""
         try:
             from sentence_transformers import SentenceTransformer
@@ -44,7 +44,7 @@ class HuggingFaceExtractor(FeatureExtractor):
         
         return X_train_transformed, X_test_transformed
     
-    def transform(self, X: list) -> Any:
+    def transform(self, X: List[str]) -> FeatureMatrix:
         """Transform new text data using fitted transformer."""
         if self.model is None:
             raise ValueError("Model not loaded yet. Call fit_transform first.")
