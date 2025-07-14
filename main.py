@@ -48,16 +48,6 @@ if __name__ == "__main__":
                 "extractor_kwargs": {"model_name": "sentence-transformers/all-MiniLM-L6-v2"},
                 "model_kwargs": {},
                 "description": "Logistic Regression + Sentence Transformer (with class weights)"
-            },
-            {
-                "data_source_type": DataSourceType.CSV_FILE,
-                "feature_extractor_type": FeatureExtractorType.OPENAI_EMBEDDINGS,
-                "model_type": ModelType.LOGISTIC_REGRESSION,
-                "use_class_weights": True,
-                "loader_kwargs": {"file_path": "dataset.csv", "text_column": "customer_review", "target_column": "return", "sep": "\t"},
-                "extractor_kwargs": {"model_name": "text-embedding-3-small", "batch_size": 100},
-                "model_kwargs": {},
-                "description": "Logistic Regression + OpenAI Embeddings (with class weights)"
             }
         ]
         
@@ -67,7 +57,7 @@ if __name__ == "__main__":
     else:
         # Single run configuration
         DATA_SOURCE = DataSourceType.CSV_FILE  # or DataSourceType.NEWSGROUPS
-        FEATURE_EXTRACTOR = FeatureExtractorType.TFIDF_VECTORIZER  # or FeatureExtractorType.COUNT_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER or FeatureExtractorType.OPENAI_EMBEDDINGS
+        FEATURE_EXTRACTOR = FeatureExtractorType.TFIDF_VECTORIZER  # or FeatureExtractorType.COUNT_VECTORIZER or FeatureExtractorType.HUGGINGFACE_TRANSFORMER
         MODEL = ModelType.LOGISTIC_REGRESSION  # or ModelType.PYTORCH_NEURAL_NETWORK or ModelType.KNN_CLASSIFIER
         USE_CLASS_WEIGHTS = False  # Enable class weights to handle imbalanced data
         
@@ -98,8 +88,6 @@ if __name__ == "__main__":
             extractor_kwargs = {"max_features": 10000, "min_df": 2, "max_df": 0.8}
         elif FEATURE_EXTRACTOR == FeatureExtractorType.HUGGINGFACE_TRANSFORMER:
             extractor_kwargs = {"model_name": "sentence-transformers/all-MiniLM-L6-v2"}
-        elif FEATURE_EXTRACTOR == FeatureExtractorType.OPENAI_EMBEDDINGS:
-            extractor_kwargs = {"model_name": "text-embedding-3-small", "batch_size": 100}
         
         if MODEL == ModelType.PYTORCH_NEURAL_NETWORK:
             model_kwargs = {"hidden_size": 128, "epochs": 50}
