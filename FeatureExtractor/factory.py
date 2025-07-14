@@ -4,6 +4,7 @@ from .base import FeatureExtractor, FeatureExtractorType
 from .count_vectorizer import CountVectorizerExtractor
 from .tfidf_vectorizer import TfidfVectorizerExtractor
 from .huggingface import HuggingFaceExtractor
+from .word2vec import Word2VecExtractor
 
 
 def create_feature_extractor(extractor_type: FeatureExtractorType, **kwargs) -> FeatureExtractor:
@@ -25,5 +26,7 @@ def create_feature_extractor(extractor_type: FeatureExtractorType, **kwargs) -> 
         return TfidfVectorizerExtractor(**kwargs)
     elif extractor_type == FeatureExtractorType.HUGGINGFACE_TRANSFORMER:
         return HuggingFaceExtractor(**kwargs)
+    elif extractor_type == FeatureExtractorType.WORD2VEC:
+        return Word2VecExtractor(**kwargs)
     else:
         raise ValueError(f"Unknown extractor type: {extractor_type}") 

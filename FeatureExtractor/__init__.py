@@ -8,6 +8,7 @@ from .base import FeatureExtractor, FeatureExtractorType
 from .count_vectorizer import CountVectorizerExtractor
 from .tfidf_vectorizer import TfidfVectorizerExtractor
 from .huggingface import HuggingFaceExtractor
+from .word2vec import Word2VecExtractor
 from .factory import create_feature_extractor
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     'CountVectorizerExtractor',
     'TfidfVectorizerExtractor',
     'HuggingFaceExtractor',
+    'Word2VecExtractor',
     'create_feature_extractor'
 ] 

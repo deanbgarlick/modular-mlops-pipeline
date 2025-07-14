@@ -11,6 +11,7 @@ class FeatureExtractorType(Enum):
     COUNT_VECTORIZER = "count_vectorizer"
     TFIDF_VECTORIZER = "tfidf_vectorizer"
     HUGGINGFACE_TRANSFORMER = "huggingface_transformer"
+    WORD2VEC = "word2vec"
 
 
 class FeatureExtractor(ABC):
