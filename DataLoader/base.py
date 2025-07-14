@@ -9,6 +9,7 @@ from typing import Tuple
 class DataSourceType(Enum):
     """Enum for different data source types."""
     CSV_FILE = "csv_file"
+    GCP_CSV_FILE = "gcp_csv_file"
     NEWSGROUPS = "newsgroups"
 
 
