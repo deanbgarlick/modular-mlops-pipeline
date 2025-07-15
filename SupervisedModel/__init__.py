@@ -24,6 +24,8 @@ from .logistic_regression import LogisticRegression
 from .pytorch_neural_network import PyTorchNeuralNetwork
 from .pytorch_neural_network_simple import SimplePyTorchNeuralNetwork
 from .knn_classifier import KNNClassifier
+from .xgb_classifier import XGBClassifier
+from .xgb_regressor import XGBRegressor
 from .factory import create_model
 
 __all__ = [
@@ -47,5 +49,7 @@ __all__ = [
     'PyTorchNeuralNetwork',
     'SimplePyTorchNeuralNetwork',
     'KNNClassifier',
+    'XGBClassifier',
+    'XGBRegressor',
     'create_model'
 ]

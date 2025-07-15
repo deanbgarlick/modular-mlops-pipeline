@@ -21,6 +21,8 @@ class SupervisedModelType(Enum):
     PYTORCH_NEURAL_NETWORK = "pytorch_neural_network"
     SIMPLE_PYTORCH_NEURAL_NETWORK = "simple_pytorch_neural_network"
     KNN_CLASSIFIER = "knn_classifier"
+    XGB_CLASSIFIER = "xgb_classifier"
+    XGB_REGRESSOR = "xgb_regressor"
 
 
 class SupervisedModel(ABC):

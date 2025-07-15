@@ -12,6 +12,8 @@ from .logistic_regression import LogisticRegression
 from .pytorch_neural_network import PyTorchNeuralNetwork
 from .pytorch_neural_network_simple import SimplePyTorchNeuralNetwork
 from .knn_classifier import KNNClassifier
+from .xgb_classifier import XGBClassifier
+from .xgb_regressor import XGBRegressor
 
 
 def create_model(model_type: SupervisedModelType, 
@@ -80,5 +82,9 @@ def create_model(model_type: SupervisedModelType,
         return SimplePyTorchNeuralNetwork(**kwargs)
     elif model_type == SupervisedModelType.KNN_CLASSIFIER:
         return KNNClassifier(**kwargs)
+    elif model_type == SupervisedModelType.XGB_CLASSIFIER:
+        return XGBClassifier(**kwargs)
+    elif model_type == SupervisedModelType.XGB_REGRESSOR:
+        return XGBRegressor(**kwargs)
     else:
         raise ValueError(f"Unknown supervised model type: {model_type}") 
