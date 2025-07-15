@@ -69,7 +69,7 @@ def create_feature_extractor(extractor_type: FeatureExtractorType,
         if extractor_type == FeatureExtractorType.HUGGINGFACE_TRANSFORMER:
             persistence = HuggingFaceExtractorPersistence(
                 bucket_name=bucket_name, 
-                use_gcp=True
+                use_gcp=False # !!!!
             )
         else:
             persistence = PickleGCPExtractorPersistence(bucket_name)

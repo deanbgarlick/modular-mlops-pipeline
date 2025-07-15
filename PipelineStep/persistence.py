@@ -44,85 +44,118 @@ class PipelineStepPersistence(ABC):
 class BasePipelineStepPersistence(PipelineStepPersistence):
     """Base class with common JSON metadata logic for PipelineStep persistence."""
     
-    def _create_metadata(self, pipeline_step: Any, fe_path: str) -> Dict[str, Any]:
+    def _create_metadata(self, pipeline_step: Any, component_path: str) -> Dict[str, Any]:
         """Create comprehensive JSON metadata for PipelineStep."""
+        # Detect component type
+        from FeatureExtractor.base import FeatureExtractor
+        from SupervisedModel.base import SupervisedModel
+        
+        component = pipeline_step.component
+        is_feature_extractor = isinstance(component, FeatureExtractor)
+        is_supervised_model = isinstance(component, SupervisedModel)
+        
+        if not (is_feature_extractor or is_supervised_model):
+            raise ValueError(f"Unknown component type: {type(component)}")
+        
+        # Build component metadata
+        component_metadata = {
+            'class_name': component.__class__.__name__,
+            'module_name': component.__class__.__module__,
+            'persistence_class': component.persistence.__class__.__name__,
+            'persistence_module': component.persistence.__class__.__module__,
+            'save_path': component_path,  # Store the path we used to save it
+            'component_type': 'FeatureExtractor' if is_feature_extractor else 'SupervisedModel',
+            'persistence_config': {
+                'bucket_name': getattr(component.persistence, 'bucket_name', None),
+                'prefix': getattr(component.persistence, 'prefix', None),
+                'base_path': getattr(component.persistence, 'base_path', None),
+                'region': getattr(component.persistence, 'region', None)
+            }
+        }
+        
+        # Add component-specific metadata
+        if is_feature_extractor:
+            component_metadata['feature_info'] = component.get_feature_info()
+        
         return {
             'pipeline_step_metadata': {
                 'included_features': pipeline_step.included_features,
                 'excluded_features': pipeline_step.excluded_features,
+                'target_column': getattr(pipeline_step, 'target_column', 'target'),
+                'prediction_column': getattr(pipeline_step, 'prediction_column', 'prediction'),
+                'probability_columns': getattr(pipeline_step, 'probability_columns', False),
                 'version': '1.0'
             },
-            'feature_extractor_metadata': {
-                'class_name': pipeline_step.feature_extractor.__class__.__name__,
-                'module_name': pipeline_step.feature_extractor.__class__.__module__,
-                'persistence_class': pipeline_step.feature_extractor.persistence.__class__.__name__,
-                'persistence_module': pipeline_step.feature_extractor.persistence.__class__.__module__,
-                'save_path': fe_path,  # Store the path we used to save it
-                'feature_info': pipeline_step.feature_extractor.get_feature_info(),
-                'persistence_config': {
-                    'bucket_name': getattr(pipeline_step.feature_extractor.persistence, 'bucket_name', None),
-                    'prefix': getattr(pipeline_step.feature_extractor.persistence, 'prefix', None),
-                    'base_path': getattr(pipeline_step.feature_extractor.persistence, 'base_path', None),
-                    'region': getattr(pipeline_step.feature_extractor.persistence, 'region', None)
-                }
-            }
+            'component_metadata': component_metadata
         }
     
-    def _reconstruct_feature_extractor(self, fe_metadata: Dict[str, Any]) -> Any:
-        """Reconstruct FeatureExtractor from metadata."""
-        # Import the FeatureExtractor class dynamically
+    def _reconstruct_component(self, component_metadata: Dict[str, Any]) -> Any:
+        """Reconstruct component (FeatureExtractor or SupervisedModel) from metadata."""
+        # Import the component class dynamically
         import importlib
-        fe_module = importlib.import_module(fe_metadata['module_name'])
-        fe_class = getattr(fe_module, fe_metadata['class_name'])
+        component_module = importlib.import_module(component_metadata['module_name'])
+        component_class = getattr(component_module, component_metadata['class_name'])
         
-        # Import and reconstruct the FeatureExtractor's persistence
-        persistence_module = importlib.import_module(fe_metadata['persistence_module'])
-        persistence_class = getattr(persistence_module, fe_metadata['persistence_class'])
+        # Import and reconstruct the component's persistence
+        persistence_module = importlib.import_module(component_metadata['persistence_module'])
+        persistence_class = getattr(persistence_module, component_metadata['persistence_class'])
         
         # Reconstruct persistence using stored configuration
-        persistence_config = fe_metadata.get('persistence_config', {})
+        persistence_config = component_metadata.get('persistence_config', {})
+        component_type = component_metadata.get('component_type', 'FeatureExtractor')
         
-        if 'GCP' in fe_metadata['persistence_class']:
+        if 'GCP' in component_metadata['persistence_class']:
             # For GCP persistence, use stored bucket name and prefix
             bucket_name = persistence_config.get('bucket_name')
             if not bucket_name:
                 # Fallback to our own bucket if we have one
                 bucket_name = getattr(self, 'bucket_name', None)
                 if not bucket_name:
-                    raise ValueError("Missing bucket_name in persistence config for GCP FeatureExtractor")
-            fe_persistence = persistence_class(
+                    raise ValueError(f"Missing bucket_name in persistence config for GCP {component_type}")
+            
+            # Use appropriate default prefix based on component type
+            default_prefix = ('feature_extractors/' if component_type == 'FeatureExtractor' 
+                            else 'supervised_models/')
+            component_persistence = persistence_class(
                 bucket_name=bucket_name,
-                prefix=persistence_config.get('prefix', 'feature_extractors/')
+                prefix=persistence_config.get('prefix', default_prefix)
             )
-        elif 'AWS' in fe_metadata['persistence_class']:
+        elif 'AWS' in component_metadata['persistence_class']:
             # For AWS persistence, use stored bucket name and prefix
             bucket_name = persistence_config.get('bucket_name')
             if not bucket_name:
                 # Fallback to our own bucket if we have one
                 bucket_name = getattr(self, 'bucket_name', None)
                 if not bucket_name:
-                    raise ValueError("Missing bucket_name in persistence config for AWS FeatureExtractor")
-            fe_persistence = persistence_class(
+                    raise ValueError(f"Missing bucket_name in persistence config for AWS {component_type}")
+            
+            # Use appropriate default prefix based on component type
+            default_prefix = ('feature_extractors/' if component_type == 'FeatureExtractor' 
+                            else 'supervised_models/')
+            component_persistence = persistence_class(
                 bucket_name=bucket_name,
-                prefix=persistence_config.get('prefix', 'feature_extractors/')
+                prefix=persistence_config.get('prefix', default_prefix)
             )
-        elif 'Local' in fe_metadata['persistence_class']:
+        elif 'Local' in component_metadata['persistence_class']:
             # For local, use stored base path or default
             base_path = persistence_config.get('base_path')
             if not base_path:
                 # Try to derive from our own base_path if we have one
                 if hasattr(self, 'base_path'):
                     our_base_path = getattr(self, 'base_path')
-                    base_path = os.path.join(os.path.dirname(our_base_path), "feature_extractors")
+                    component_dir = ('feature_extractors' if component_type == 'FeatureExtractor' 
+                                   else 'supervised_models')
+                    base_path = os.path.join(os.path.dirname(our_base_path), component_dir)
                 else:
-                    base_path = 'feature_extractors'
-            fe_persistence = persistence_class(base_path=base_path)
+                    base_path = ('feature_extractors' if component_type == 'FeatureExtractor' 
+                               else 'supervised_models')
+            component_persistence = persistence_class(base_path=base_path)
         else:
             # Fallback for unknown persistence types
-            raise ValueError(f"Unknown persistence class: {fe_metadata['persistence_class']}")
+            raise ValueError(f"Unknown persistence class: {component_metadata['persistence_class']}")
         
-        # Load the FeatureExtractor with reconstructed persistence
-        return fe_class.load_from_path(fe_metadata['save_path'], fe_persistence)
+        # Load the component with reconstructed persistence
+        return component_class.load_from_path(component_metadata['save_path'], component_persistence)
     
     @abstractmethod
     def _upload_json(self, metadata_json: str, path: str) -> None:
@@ -141,14 +174,14 @@ class BasePipelineStepPersistence(PipelineStepPersistence):
     
     def save(self, pipeline_step: Any, path: str) -> None:
         """Save PipelineStep using JSON metadata format."""
-        # Define FeatureExtractor save path
-        fe_path = f"{path}_feature_extractor"
+        # Define component save path
+        component_path = f"{path}_component"
         
         # Create comprehensive JSON metadata
-        pipeline_step_data = self._create_metadata(pipeline_step, fe_path)
+        pipeline_step_data = self._create_metadata(pipeline_step, component_path)
         
-        # Let FeatureExtractor save itself using its own persistence system
-        pipeline_step.feature_extractor.save(fe_path)
+        # Let component save itself using its own persistence system
+        pipeline_step.component.save(component_path)
         
         # Upload JSON metadata
         metadata_json = json.dumps(pipeline_step_data, indent=2)
@@ -164,17 +197,31 @@ class BasePipelineStepPersistence(PipelineStepPersistence):
         
         # Extract metadata
         ps_metadata = pipeline_step_data['pipeline_step_metadata']
-        fe_metadata = pipeline_step_data['feature_extractor_metadata']
         
-        # Reconstruct FeatureExtractor
-        feature_extractor = self._reconstruct_feature_extractor(fe_metadata)
+        # Handle both old and new metadata formats for backward compatibility
+        if 'component_metadata' in pipeline_step_data:
+            component_metadata = pipeline_step_data['component_metadata']
+        elif 'feature_extractor_metadata' in pipeline_step_data:
+            # Backward compatibility with old format
+            component_metadata = pipeline_step_data['feature_extractor_metadata']
+            # Ensure component_type is set for old format
+            if 'component_type' not in component_metadata:
+                component_metadata['component_type'] = 'FeatureExtractor'
+        else:
+            raise ValueError("No component metadata found in saved PipelineStep")
+        
+        # Reconstruct component
+        component = self._reconstruct_component(component_metadata)
         
         # Reconstruct PipelineStep
         from .pipeline_step import PipelineStep
         pipeline_step = PipelineStep(
-            feature_extractor, 
-            ps_metadata['included_features'],
-            ps_metadata.get('excluded_features', [])
+            component=component,
+            included_features=ps_metadata['included_features'],
+            excluded_features=ps_metadata.get('excluded_features', []),
+            target_column=ps_metadata.get('target_column', 'target'),
+            prediction_column=ps_metadata.get('prediction_column', 'prediction'),
+            probability_columns=ps_metadata.get('probability_columns', False)
         )
         
         print(f"PipelineStep loaded from {self._get_storage_info()}/{path}")

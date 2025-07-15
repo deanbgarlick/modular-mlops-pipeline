@@ -15,17 +15,17 @@ def setup_persistence_environment():
     """Setup and validate persistence environment variables."""
     
     # GCP bucket for ML artifacts
-    gcp_bucket = os.getenv("GCP_ML_BUCKET")
+    gcp_bucket = os.getenv("ML_BUCKET_NAME")
     if not gcp_bucket:
-        print("⚠ Warning: GCP_ML_BUCKET not set in environment variables")
+        print("⚠ Warning: ML_BUCKET_NAME not set in environment variables")
         print("  Using default bucket name. Set in .env file for production:")
-        print("  GCP_ML_BUCKET=your-project-id-ml-artifacts")
-        gcp_bucket = "default-ml-artifacts"
+        print("  ML_BUCKET_NAME=your-project-id-ml-artifacts")
+        gcp_bucket = "ml-ops-example-bucket-1"
     
     # Other persistence settings
     use_gcp = os.getenv("USE_GCP_PERSISTENCE", "true").lower() == "true"
     save_artifacts = os.getenv("SAVE_ML_ARTIFACTS", "true").lower() == "true"
-    force_retrain = os.getenv("FORCE_RETRAIN", "false").lower() == "true"
+    force_retrain = os.getenv("FORCE_RETRAIN", "true").lower() == "true"
     
     print(f"🔧 Persistence Configuration:")
     print(f"  GCP Bucket: {gcp_bucket}")
@@ -64,7 +64,7 @@ def run_single_experiment(persistence_config):
         }
     elif DATA_SOURCE == DataSourceType.GCP_CSV_FILE:
         loader_kwargs = {
-            "bucket_name": os.getenv("GCP_DATA_BUCKET", "your-data-bucket"),
+            "bucket_name": os.getenv("DATA_BUCKET_NAME", "your-data-bucket"),
             "file_path": "training_data.csv",
             "text_column": "text",
             "target_column": "label"
@@ -101,17 +101,14 @@ def run_single_experiment(persistence_config):
         use_class_weights=USE_CLASS_WEIGHTS,
         loader_kwargs=loader_kwargs,
         extractor_kwargs=extractor_kwargs,
-        model_kwargs=model_kwargs
+        model_kwargs=model_kwargs,
+        save_pipeline=persistence_config['save_artifacts'],
+        gcp_bucket_name=persistence_config['gcp_bucket'],
+        pipeline_save_path=None #persistence_config['pipeline_save_path']
     )
     
     print(f"\n🎉 Single Experiment Complete!")
     print(f"Final Results: Accuracy={results['accuracy']:.4f}, F1-Macro={results['f1_macro']:.4f}")
-    
-    # Note: Persistence functionality has been removed from run_pipeline
-    # The persistence setup code is kept for future use if needed
-    if persistence_config['save_artifacts']:
-        print(f"\n💾 Note: Artifact saving was requested but persistence has been removed from run_pipeline")
-        print(f"  To restore persistence functionality, integrate the persistence code back into run_pipeline")
     
     return results
 
@@ -144,11 +141,11 @@ def demonstrate_persistence_features():
     print("   SAVE_ML_ARTIFACTS=false python main_single_run.py")
     
     print("\n🔧 Environment Variables (.env file):")
-    print("   GCP_ML_BUCKET=your-project-id-ml-artifacts")
+    print("   ML_BUCKET_NAME=your-project-id-ml-artifacts")
     print("   USE_GCP_PERSISTENCE=true")
     print("   SAVE_ML_ARTIFACTS=true") 
     print("   FORCE_RETRAIN=false")
-    print("   GCP_DATA_BUCKET=your-project-id-data")
+    print("   DATA_BUCKET_NAME=your-project-id-data")
     
     print("\n💡 Production Benefits:")
     print("   • Reuse fitted extractors across experiments")
@@ -168,11 +165,11 @@ if __name__ == "__main__":
     persistence_config = setup_persistence_environment()
     
     # Configuration
-    SHOW_PERSISTENCE_DEMO = False  # Set to True to show persistence features
+    # SHOW_PERSISTENCE_DEMO = False  # Set to True to show persistence features
     
-    # Show persistence demo if enabled
-    if SHOW_PERSISTENCE_DEMO:
-        demonstrate_persistence_features()
+    # # Show persistence demo if enabled
+    # if SHOW_PERSISTENCE_DEMO:
+    #     demonstrate_persistence_features()
     
     # Run single experiment with persistence
     run_single_experiment(persistence_config)

@@ -15,11 +15,11 @@ def setup_persistence_environment():
     """Setup and validate persistence environment variables."""
     
     # GCP bucket for ML artifacts
-    gcp_bucket = os.getenv("GCP_ML_BUCKET")
+    gcp_bucket = os.getenv("ML_BUCKET_NAME")
     if not gcp_bucket:
-        print("⚠ Warning: GCP_ML_BUCKET not set in environment variables")
+        print("⚠ Warning: ML_BUCKET_NAME not set in environment variables")
         print("  Using default bucket name. Set in .env file for production:")
-        print("  GCP_ML_BUCKET=your-project-id-ml-artifacts")
+        print("  ML_BUCKET_NAME=your-project-id-ml-artifacts")
         gcp_bucket = "default-ml-artifacts"
     
     # Other persistence settings
@@ -115,11 +115,11 @@ def demonstrate_persistence_features():
     print("   SAVE_ML_ARTIFACTS=false python main_experiment_run.py")
     
     print("\n🔧 Environment Variables (.env file):")
-    print("   GCP_ML_BUCKET=your-project-id-ml-artifacts")
+    print("   ML_BUCKET_NAME=your-project-id-ml-artifacts")
     print("   USE_GCP_PERSISTENCE=true")
     print("   SAVE_ML_ARTIFACTS=true") 
     print("   FORCE_RETRAIN=false")
-    print("   GCP_DATA_BUCKET=your-project-id-data")
+    print("   DATA_BUCKET_NAME=your-project-id-data")
     
     print("\n💡 Production Benefits:")
     print("   • Reuse fitted extractors across experiments")

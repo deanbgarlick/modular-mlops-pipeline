@@ -1,43 +1,10 @@
 """Pipeline class for composing transformation steps."""
 
-import json
-import os
 from typing import List, Union, Optional, Dict, Any
 
 # Import the protocol - adjust path as needed
 from PipelineStep.transform_step import TransformationStep, InputData, OutputData, FeatureMatrix
-
-
-class PipelinePersistence:
-    """Simple persistence for Pipeline metadata using local JSON files."""
-    
-    def __init__(self, base_path: str = "pipelines"):
-        """
-        Initialize pipeline persistence.
-        
-        Args:
-            base_path: Base directory for storing pipeline metadata
-        """
-        self.base_path = base_path
-        os.makedirs(self.base_path, exist_ok=True)
-    
-    def save_metadata(self, metadata: Dict[str, Any], path: str) -> None:
-        """Save pipeline metadata to JSON file."""
-        full_path = os.path.join(self.base_path, f"{path}.json")
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
-        with open(full_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
-    
-    def load_metadata(self, path: str) -> Dict[str, Any]:
-        """Load pipeline metadata from JSON file."""
-        full_path = os.path.join(self.base_path, f"{path}.json")
-        
-        if not os.path.exists(full_path):
-            raise FileNotFoundError(f"Pipeline metadata not found at: {full_path}")
-        
-        with open(full_path, 'r') as f:
-            return json.load(f)
+from .persistence import PipelinePersistence, LocalPipelinePersistence
 
 
 class Pipeline:
@@ -66,7 +33,7 @@ class Pipeline:
             raise ValueError("Pipeline must have at least one step")
         
         self.steps = steps
-        self.persistence = persistence or PipelinePersistence()
+        self.persistence = persistence or LocalPipelinePersistence()
     
     def fit_transform(self, X_train: InputData, X_test: Optional[InputData] = None,
                      y_train: Optional[Any] = None, y_test: Optional[Any] = None) -> OutputData:

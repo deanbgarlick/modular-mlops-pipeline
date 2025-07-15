@@ -12,11 +12,21 @@ from .run_pipeline import (
     evaluate_model,
     run_pipeline
 )
+from .pipeline import Pipeline
+from .persistence import (
+    PipelinePersistence,
+    LocalPipelinePersistence,
+    GCPPipelinePersistence
+)
 
 __all__ = [
     'prepare_data',
     # 'create_features',
     # 'train_model', 
     'evaluate_model',
-    'run_pipeline'
+    'run_pipeline',
+    'Pipeline',
+    'PipelinePersistence',
+    'LocalPipelinePersistence',
+    'GCPPipelinePersistence'
 ] 

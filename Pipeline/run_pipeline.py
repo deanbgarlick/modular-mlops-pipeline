@@ -15,7 +15,9 @@ from SupervisedModel import (
 )
 from DataLoader import DataSourceType, create_data_loader
 from PipelineStep.pipeline_step import PipelineStep
+from PipelineStep.persistence import GCPPipelineStepPersistence, LocalPipelineStepPersistence
 from Pipeline.pipeline import Pipeline
+from Pipeline.persistence import GCPPipelinePersistence, LocalPipelinePersistence
 
 
 def prepare_data(df, test_size=0.2, random_state=42):
@@ -59,25 +61,68 @@ def evaluate_model(y_true, y_pred, target_names):
 def create_pipeline_components(feature_extractor_type: FeatureExtractorType,
                               model_type: SupervisedModelType,
                               extractor_kwargs: Dict[str, Any],
-                              model_kwargs: Dict[str, Any]) -> Pipeline:
+                              model_kwargs: Dict[str, Any],
+                              pipeline_persistence: Optional[Any] = None,
+                              gcp_bucket_name: Optional[str] = None) -> Pipeline:
     """Create a pipeline with feature extraction and model components."""
     
-    # Create feature extractor
+    # Import local persistence classes
+    from FeatureExtractor.persistence import PickleLocalExtractorPersistence
+    from SupervisedModel.persistence import PickleLocalFilePersistence, TorchLocalFilePersistence
+    from SupervisedModel import SupervisedModelType
+    
+    # Create local persistence for feature extractor
+    extractor_persistence = PickleLocalExtractorPersistence(base_path="artifacts/feature_extractors")
+    
+    # Create local persistence for model (choose based on model type)
+    if model_type == SupervisedModelType.PYTORCH_NEURAL_NETWORK:
+        model_persistence = TorchLocalFilePersistence(base_path="artifacts/models")
+    else:
+        model_persistence = PickleLocalFilePersistence(base_path="artifacts/models")
+    
+    # Create feature extractor with local persistence
     feature_extractor = create_feature_extractor(
         feature_extractor_type,
+        persistence=extractor_persistence,
         **extractor_kwargs
     )
     
-    # Create model
+    # Create model with local persistence
     model = create_model(
         model_type,
+        persistence=model_persistence,
         **model_kwargs
     )
+    
+    # Set up persistence for PipelineSteps
+    feature_extractor_persistence = None
+    model_persistence = None
+    
+    # if gcp_bucket_name:
+    if False:
+        feature_extractor_persistence = GCPPipelineStepPersistence(
+            bucket_name=gcp_bucket_name,
+            prefix="pipeline_steps/feature_extractors/"
+        )
+        model_persistence = GCPPipelineStepPersistence(
+            bucket_name=gcp_bucket_name,
+            prefix="pipeline_steps/models/"
+        )
+        print(f"PipelineSteps will use GCP persistence in bucket: {gcp_bucket_name}")
+    else:
+        feature_extractor_persistence = LocalPipelineStepPersistence(
+            base_path="pipeline_steps/feature_extractors"
+        )
+        model_persistence = LocalPipelineStepPersistence(
+            base_path="pipeline_steps/models"
+        )
+        print("PipelineSteps will use local persistence")
     
     # Create pipeline step wrapper for feature extractor
     feature_pipeline_step = PipelineStep(
         component=feature_extractor,
-        included_features=["text"]  # Use the 'text' column from our dataframes
+        included_features=["text"],  # Use the 'text' column from our dataframes
+        persistence=feature_extractor_persistence
     )
     
     # Create pipeline step wrapper for model  
@@ -86,11 +131,12 @@ def create_pipeline_components(feature_extractor_type: FeatureExtractorType,
         included_features=["*"],  # Use all feature columns
         excluded_features=["text", "target"],  # Exclude original text and target
         target_column="target",
-        prediction_column="prediction"
+        prediction_column="prediction",
+        persistence=model_persistence
     )
     
-    # Create pipeline
-    pipeline = Pipeline([feature_pipeline_step, model_pipeline_step])  # type: ignore[arg-type]
+    # Create pipeline with optional custom persistence
+    pipeline = Pipeline([feature_pipeline_step, model_pipeline_step], persistence=pipeline_persistence)  # type: ignore[arg-type]
     
     return pipeline
 
@@ -101,7 +147,10 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
                  use_class_weights: bool = False,
                  loader_kwargs: Optional[Dict[str, Any]] = None,
                  extractor_kwargs: Optional[Dict[str, Any]] = None, 
-                 model_kwargs: Optional[Dict[str, Any]] = None):
+                 model_kwargs: Optional[Dict[str, Any]] = None,
+                 save_pipeline: bool = False,
+                 gcp_bucket_name: Optional[str] = None,
+                 pipeline_save_path: Optional[str] = None):
     """Run the complete machine learning pipeline using the Pipeline class.
     
     Args:
@@ -112,6 +161,9 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
         loader_kwargs: Arguments for data loader
         extractor_kwargs: Arguments for feature extractor
         model_kwargs: Arguments for model
+        save_pipeline: Whether to save the trained pipeline
+        gcp_bucket_name: GCP bucket name for pipeline persistence (if None, uses local storage)
+        pipeline_save_path: Path/name for saving the pipeline (if None, auto-generates)
     
     Returns:
         Dict containing results and pipeline information
@@ -141,10 +193,24 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     # Prepare train/test splits
     train_df, test_df = prepare_data(df)
     
+    # Set up pipeline persistence
+    pipeline_persistence = None
+    # if save_pipeline and gcp_bucket_name:
+    if save_pipeline and False:
+        pipeline_persistence = GCPPipelinePersistence(gcp_bucket_name)
+        print(f"Pipeline will be saved to GCP bucket: {gcp_bucket_name}")
+    elif save_pipeline:
+        pipeline_persistence = LocalPipelinePersistence(
+            base_path="pipelines"
+        )
+        print("Pipeline will be saved locally")
+    
     # Create pipeline
     pipeline = create_pipeline_components(
         feature_extractor_type, model_type,
-        extractor_kwargs, model_kwargs
+        extractor_kwargs, model_kwargs,
+        pipeline_persistence,
+        gcp_bucket_name
     )
     
     # Train the pipeline
@@ -219,6 +285,21 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
     except Exception as e:
         print(f"Error making sample prediction: {e}")
     
+    # Save pipeline if requested
+    if save_pipeline:
+        if pipeline_save_path is None:
+            # Auto-generate pipeline save path
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            pipeline_save_path = f"pipeline_{feature_extractor_type.value}_{model_type.value}_{timestamp}"
+        
+        try:
+            print(f"\nSaving pipeline to: {pipeline_save_path}")
+            pipeline.save(pipeline_save_path)
+            print("Pipeline saved successfully!")
+        except Exception as e:
+            print(f"Error saving pipeline: {e}")
+    
     return {
         "accuracy": accuracy,
         "f1_macro": f1_macro,
@@ -226,5 +307,7 @@ def run_pipeline(data_source_type: DataSourceType = DataSourceType.NEWSGROUPS,
         "predictions": y_pred,
         "target_names": target_names,
         "pipeline": pipeline,
-        "training_time": time.time()
+        "training_time": time.time(),
+        "pipeline_saved": save_pipeline,
+        "pipeline_save_path": pipeline_save_path if save_pipeline else None
     } 
